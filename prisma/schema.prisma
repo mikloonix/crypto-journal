@@ -3,20 +3,103 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MarketType {
+  SPOT
+  FUTURE
+}
+
+enum Direction {
+  LONG
+  SHORT
+}
+
+enum TradeStatus {
+  OPEN
+  CLOSED
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  password      String
+  name          String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  trades        Trade[]
+  riskSettings  RiskSettings?
+  
+  @@map("users")
+}
+
+model RiskSettings {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  accountBalance Float    @default(10000)
+  riskPerTrade   Float    @default(1.0)
+  maxDrawdown    Float    @default(20.0)
+  riskPerDay     Float    @default(3.0)
+  maxOpenRisk    Float    @default(5.0)
+  updatedAt      DateTime @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("risk_settings")
 }
 
 model Trade {
-  id         String   @id @default(uuid())
-  ticker     String
-  direction  String
-  entryPrice Float
-  exitPrice  Float?
-  volume     Float
-  leverage Float?
-  fee      Float?
-  entryTime  DateTime @default(now())
-  exitTime   DateTime?
-  status     String   @default("OPEN")
+  id            String      @id @default(cuid())
+  userId        String
+  symbol        String
+  marketType    MarketType  @default(FUTURE)
+  direction     Direction
+  status        TradeStatus @default(OPEN)
+  
+  entries       Entry[]
+  exits         Exit[]
+  
+  strategy      String?
+  emotionEntry  String?
+  emotionExit   String?
+  notes         String?
+  
+  fee           Float       @default(0)
+  funding       Float       @default(0)
+  
+  createdAt     DateTime    @default(now())
+  closedAt      DateTime?
+  updatedAt     DateTime    @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, status])
+  @@map("trades")
+}
+
+model Entry {
+  id        String   @id @default(cuid())
+  tradeId   String
+  price     Float
+  volume    Float
+  leverage  Int?
+  timestamp DateTime @default(now())
+  
+  trade Trade @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  
+  @@map("entries")
+}
+
+model Exit {
+  id        String   @id @default(cuid())
+  tradeId   String
+  price     Float
+  volume    Float
+  timestamp DateTime @default(now())
+  
+  trade Trade @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  
+  @@map("exits")
 }
