@@ -244,7 +244,7 @@ export default function DashboardPage() {
   }
 
   async function deleteTrade(id: string) {
-    if (!confirm("Удалить трейд в корзину? Восстановление — в разделе «Корзина».")) return
+    if (!confirm("Удалить трейд в корзину? Восстановление — Настройки → Корзина.")) return
 
     const res = await fetch("/api/trades/delete", {
       method: "POST",
@@ -482,7 +482,6 @@ export default function DashboardPage() {
               <th className="py-2 pr-2">Вход (ср.)</th>
               <th className="py-2 pr-2">Выход (ср.)</th>
               <th className="py-2 pr-2">PnL (реал.)</th>
-              <th className="py-2 pr-2">Статус</th>
               <th className="py-2">Действия</th>
             </tr>
           </thead>
@@ -526,7 +525,6 @@ export default function DashboardPage() {
                     >
                       {exitVol > 0 ? formatInQuote(displayPnl, q) : "—"}
                     </td>
-                    <td className="py-2 pr-2">{t.status}</td>
                     <td className="py-2">
                       <div className="flex flex-wrap gap-2">
                         <button
@@ -664,7 +662,7 @@ export default function DashboardPage() {
                   </tr>
                   {expanded[t.id] && (
                     <tr className="border-b border-gray-900 bg-[#0b0b0b]">
-                      <td colSpan={10} className="py-3">
+                      <td colSpan={9} className="py-3">
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                           <div>
                             <div className="text-gray-400 text-xs mb-2">Входы</div>
