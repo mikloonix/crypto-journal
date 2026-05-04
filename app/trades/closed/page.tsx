@@ -8,7 +8,7 @@ import type { Exit } from "@prisma/client"
 import type { TradeWithLegs } from "@/components/EquityChart"
 import { calculateTradePnL, calculateVolumes } from "@/lib/risk-manager"
 import { pnlRoiForExitLeg } from "@/lib/exit-leg-pnl"
-import { formatInQuote, formatPercent } from "@/lib/format-amount"
+import { formatDecimal, formatInQuote, formatPercent } from "@/lib/format-amount"
 import { quoteCurrencyFromSymbol } from "@/lib/quote-currency"
 
 type ViewMode = "trades" | "exits"
@@ -176,9 +176,9 @@ export default function ClosedTradesPage() {
                       <td className="py-2 pr-2">{t.symbol}</td>
                       <td className="py-2 pr-2">{t.direction}</td>
                       <td className="py-2 pr-2">{formatInQuote(entryVolume, q)}</td>
-                      <td className="py-2 pr-2">{avgEntry ? formatInQuote(avgEntry, q) : "—"}</td>
+                      <td className="py-2 pr-2">{avgEntry ? formatDecimal(avgEntry) : "—"}</td>
                       <td className="py-2 pr-2">
-                        {avgExit != null ? formatInQuote(avgExit, q) : "—"}
+                        {avgExit != null ? formatDecimal(avgExit) : "—"}
                       </td>
                       <td className={pnl > 0 ? "text-green-400" : pnl < 0 ? "text-red-400" : ""}>
                         {formatInQuote(pnl, q)}
@@ -227,7 +227,7 @@ export default function ClosedTradesPage() {
                                       <span className="text-gray-400">
                                         {new Date(e.timestamp).toLocaleString()}
                                       </span>
-                                      <span>{formatInQuote(e.price, q)}</span>
+                                      <span>{formatDecimal(e.price)}</span>
                                       <span>{formatInQuote(e.volume, q)}</span>
                                       <span>
                                         fee{" "}
@@ -259,7 +259,7 @@ export default function ClosedTradesPage() {
                                         <span className="text-gray-400">
                                           {new Date(x.timestamp).toLocaleString()}
                                         </span>
-                                        <span>{formatInQuote(x.price, q)}</span>
+                                        <span>{formatDecimal(x.price)}</span>
                                         <span>{formatInQuote(x.volume, q)}</span>
                                         <span>
                                           fee{" "}
@@ -341,7 +341,7 @@ export default function ClosedTradesPage() {
                     <td className="py-2 pr-2">{t.symbol}</td>
                     <td className="py-2 pr-2 font-mono text-xs text-gray-500">{t.id.slice(0, 8)}…</td>
                     <td className="py-2 pr-2">{t.direction}</td>
-                    <td className="py-2 pr-2">{formatInQuote(x.price, q)}</td>
+                    <td className="py-2 pr-2">{formatDecimal(x.price)}</td>
                     <td className="py-2 pr-2">{formatInQuote(x.volume, q)}</td>
                     <td className="py-2 pr-2">{x.liquidityRole}</td>
                     <td className="py-2 pr-2">

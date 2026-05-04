@@ -513,8 +513,8 @@ export default function DashboardPage() {
                       {remainingVolume > 0 ? formatInQuote(remainingVolume, q) : `0 ${q}`}
                     </td>
                     <td className="py-2 pr-2">{maxLeverage ? `${maxLeverage}x` : "—"}</td>
-                    <td className="py-2 pr-2">{avgEntry ? formatInQuote(avgEntry, q) : "—"}</td>
-                    <td className="py-2 pr-2">{avgExit != null ? formatInQuote(avgExit, q) : "—"}</td>
+                    <td className="py-2 pr-2">{avgEntry ? formatDecimal(avgEntry) : "—"}</td>
+                    <td className="py-2 pr-2">{avgExit != null ? formatDecimal(avgExit) : "—"}</td>
                     <td
                       className={
                         displayPnl > 0
@@ -677,7 +677,7 @@ export default function DashboardPage() {
                                     <span className="text-gray-400">
                                       {new Date(e.timestamp).toLocaleString()}
                                     </span>
-                                    <span>цена: {formatInQuote(e.price, q)}</span>
+                                    <span>цена: {formatDecimal(e.price)}</span>
                                     <span>маржа: {formatInQuote(e.volume, q)}</span>
                                     <span>lev: {e.leverage ?? "—"}</span>
                                     <span>
@@ -706,7 +706,7 @@ export default function DashboardPage() {
                                       <span className="text-gray-400">
                                         {new Date(x.timestamp).toLocaleString()}
                                       </span>
-                                      <span>{formatInQuote(x.price, q)}</span>
+                                      <span>{formatDecimal(x.price)}</span>
                                       <span>{formatInQuote(x.volume, q)}</span>
                                       <span>
                                         fee{" "}
