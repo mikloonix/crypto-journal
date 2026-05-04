@@ -15,6 +15,13 @@ type ViewMode = "trades" | "exits"
 
 type ExitRow = { exit: Exit; trade: TradeWithLegs }
 
+function avgEntryForTrade(t: TradeWithLegs): number | null {
+  const { entryVolume } = calculateVolumes(t)
+  if (entryVolume <= 0) return null
+  const entryValue = t.entries.reduce((s, e) => s + e.price * e.volume, 0)
+  return entryValue / entryVolume
+}
+
 export default function ClosedTradesPage() {
   const { status } = useSession()
   const router = useRouter()
@@ -152,6 +159,9 @@ export default function ClosedTradesPage() {
                 <th className="py-2 pr-2">Выход (ср.)</th>
                 <th className="py-2 pr-2">PnL</th>
                 <th className="py-2 pr-2">ROI</th>
+                <th className="py-2 pr-2">Стратегия</th>
+                <th className="py-2 pr-2">Эмоция вход</th>
+                <th className="py-2 pr-2">Эмоция выход</th>
                 <th className="py-2 pr-2">Закрыто</th>
                 <th className="py-2 pr-2">Детали</th>
                 <th className="py-2">Действия</th>
@@ -186,6 +196,15 @@ export default function ClosedTradesPage() {
                       <td className={roi > 0 ? "text-green-400" : roi < 0 ? "text-red-400" : ""}>
                         {formatPercent(roi)}%
                       </td>
+                      <td className="py-2 pr-2 max-w-[140px] truncate" title={t.strategy ?? ""}>
+                        {t.strategy ?? "—"}
+                      </td>
+                      <td className="py-2 pr-2 max-w-[120px] truncate" title={t.emotionEntry ?? ""}>
+                        {t.emotionEntry ?? "—"}
+                      </td>
+                      <td className="py-2 pr-2 max-w-[120px] truncate" title={t.emotionExit ?? ""}>
+                        {t.emotionExit ?? "—"}
+                      </td>
                       <td className="py-2 pr-2">
                         {t.closedAt ? new Date(t.closedAt).toLocaleString() : "—"}
                       </td>
@@ -210,7 +229,7 @@ export default function ClosedTradesPage() {
                     </tr>
                     {expanded[t.id] && (
                       <tr className="border-b border-gray-900 bg-[#0b0b0b]">
-                        <td colSpan={10} className="py-3">
+                        <td colSpan={13} className="py-3">
                           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                             <div>
                               <div className="mb-2 text-xs text-gray-400">Входы</div>
@@ -318,14 +337,17 @@ export default function ClosedTradesPage() {
                 <th className="py-2 pr-2">Символ</th>
                 <th className="py-2 pr-2">Трейд</th>
                 <th className="py-2 pr-2">Напр.</th>
-                <th className="py-2 pr-2">Цена</th>
+                <th className="py-2 pr-2">Вход (ср.)</th>
+                <th className="py-2 pr-2">Выход</th>
                 <th className="py-2 pr-2">Маржа</th>
                 <th className="py-2 pr-2">M/T</th>
                 <th className="py-2 pr-2">Комиссия</th>
                 <th className="py-2 pr-2">Фандинг</th>
                 <th className="py-2 pr-2">PnL</th>
                 <th className="py-2 pr-2">ROI</th>
-                <th className="py-2 pr-2">Эмоция выхода</th>
+                <th className="py-2 pr-2">Стратегия</th>
+                <th className="py-2 pr-2">Эмоция вход</th>
+                <th className="py-2 pr-2">Эмоция выход</th>
                 <th className="py-2">Действия</th>
               </tr>
             </thead>
@@ -333,6 +355,7 @@ export default function ClosedTradesPage() {
               {exitRows.map(({ exit: x, trade: t }) => {
                 const q = quoteCurrencyFromSymbol(t.symbol)
                 const { pnl, roiPct } = pnlRoiForExitLeg(t.direction, t.entries, x)
+                const avgIn = avgEntryForTrade(t)
                 return (
                   <tr key={x.id} className="border-b border-gray-900">
                     <td className="py-2 pr-2 text-gray-400">
@@ -341,6 +364,7 @@ export default function ClosedTradesPage() {
                     <td className="py-2 pr-2">{t.symbol}</td>
                     <td className="py-2 pr-2 font-mono text-xs text-gray-500">{t.id.slice(0, 8)}…</td>
                     <td className="py-2 pr-2">{t.direction}</td>
+                    <td className="py-2 pr-2">{avgIn != null ? formatDecimal(avgIn) : "—"}</td>
                     <td className="py-2 pr-2">{formatDecimal(x.price)}</td>
                     <td className="py-2 pr-2">{formatInQuote(x.volume, q)}</td>
                     <td className="py-2 pr-2">{x.liquidityRole}</td>
@@ -356,7 +380,15 @@ export default function ClosedTradesPage() {
                     <td className={roiPct > 0 ? "text-green-400" : roiPct < 0 ? "text-red-400" : ""}>
                       {formatPercent(roiPct)}%
                     </td>
-                    <td className="py-2 pr-2 text-gray-200">{x.emotionExit ?? "—"}</td>
+                    <td className="py-2 pr-2 max-w-[140px] truncate" title={t.strategy ?? ""}>
+                      {t.strategy ?? "—"}
+                    </td>
+                    <td className="py-2 pr-2 max-w-[120px] truncate" title={t.emotionEntry ?? ""}>
+                      {t.emotionEntry ?? "—"}
+                    </td>
+                    <td className="py-2 pr-2 max-w-[120px] truncate" title={x.emotionExit ?? ""}>
+                      {x.emotionExit ?? "—"}
+                    </td>
                     <td className="py-2">
                       <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap">
                         <button
