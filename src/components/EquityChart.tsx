@@ -10,6 +10,7 @@ import {
 } from "recharts"
 import type { Trade, Entry, Exit } from "@prisma/client"
 import { calculateTradePnL } from "@/lib/risk-manager"
+import { formatDecimal, formatInQuote } from "@/lib/format-amount"
 
 export type TradeWithLegs = Trade & { entries: Entry[]; exits: Exit[] }
 
@@ -29,9 +30,9 @@ export default function EquityChart({ trades }: { trades: TradeWithLegs[] }) {
     const roi = ((balance - INITIAL_DEPOSIT) / INITIAL_DEPOSIT) * 100
     return {
       trade: i + 1,
-      balance: Number(balance.toFixed(2)),
-      pnl: Number(pnl.toFixed(2)),
-      roi: Number(roi.toFixed(2)),
+      balance,
+      pnl,
+      roi,
     }
   })
 
@@ -42,8 +43,14 @@ export default function EquityChart({ trades }: { trades: TradeWithLegs[] }) {
       <ResponsiveContainer width="100%" height={300}>
         <LineChart data={data}>
           <XAxis dataKey="trade" />
-          <YAxis />
-          <Tooltip />
+          <YAxis tickFormatter={(v) => formatDecimal(Number(v))} />
+          <Tooltip
+            formatter={(value: number | string) => [
+              formatInQuote(Number(value), "USDT"),
+              "Баланс",
+            ]}
+            labelFormatter={(label) => `Трейд ${label}`}
+          />
           <Line type="monotone" dataKey="balance" stroke="#4ade80" />
         </LineChart>
       </ResponsiveContainer>
