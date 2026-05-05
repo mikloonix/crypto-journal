@@ -19,7 +19,11 @@ async function main() {
           riskPerTrade: 1.0,
           maxDrawdown: 20.0,
           riskPerDay: 3.0,
-          maxOpenRisk: 5.0
+          maxOpenRisk: 5.0,
+          defaultFeeUsdt: 0,
+          makerFeeBps: 2,
+          takerFeeBps: 5,
+          bingxVipTier: 0,
         }
       }
     }

@@ -57,6 +57,7 @@ export default [
       react: { version: "detect" },
     },
     rules: {
+      "no-unused-vars": "off",
       // TS: keep noise low for now (stage 1).
       "@typescript-eslint/no-unused-vars": [
         "warn",

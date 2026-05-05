@@ -1,24 +1,19 @@
 "use client"
 
 import { type FormEvent, useEffect, useState } from "react"
-import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { BINGX_VIP_MAX_TIER, feeBpsForVipTier } from "@/lib/bingx-vip"
-
-type TradingDefaults = {
-  defaultFeeUsdt: number
-  makerFeeBps: number
-  takerFeeBps: number
-  bingxVipTier: number
-  maxLeverage: number
-}
+import { getTradingDefaults, patchTradingDefaults } from "@/features/trades/api"
+import { useProtectedPageSession } from "@/features/trades/hooks/use-protected-page-session"
+import { redirectOn401 } from "@/features/trades/session-expired"
 
 const VIP_OPTIONS = Array.from({ length: BINGX_VIP_MAX_TIER + 1 }, (_, i) => i)
 
 export default function SettingsPage() {
-  const { status } = useSession()
   const router = useRouter()
+  const gate = useProtectedPageSession()
+  const authed = gate === "authed"
   const [defaultFee, setDefaultFee] = useState("")
   const [vipTier, setVipTier] = useState(0)
   const [maxLev, setMaxLev] = useState(150)
@@ -26,21 +21,18 @@ export default function SettingsPage() {
   const [msg, setMsg] = useState<string | null>(null)
 
   useEffect(() => {
-    if (status === "unauthenticated") router.push("/login")
-  }, [status, router])
-
-  useEffect(() => {
-    if (status !== "authenticated") return
-    fetch("/api/settings/trading")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: TradingDefaults | null) => {
-        if (!d) return
-        setDefaultFee(String(d.defaultFeeUsdt ?? 0))
-        setVipTier(Math.min(BINGX_VIP_MAX_TIER, Math.max(0, Math.round(Number(d.bingxVipTier) || 0))))
-        setMaxLev(d.maxLeverage ?? 150)
-      })
-      .catch(console.error)
-  }, [status])
+    if (!authed) return
+    void getTradingDefaults().then((r) => {
+      if (!r.ok) {
+        redirectOn401(router, r.status)
+        return
+      }
+      const d = r.data
+      setDefaultFee(String(d.defaultFeeUsdt ?? 0))
+      setVipTier(Math.min(BINGX_VIP_MAX_TIER, Math.max(0, Math.round(Number(d.bingxVipTier) || 0))))
+      setMaxLev(d.maxLeverage ?? 150)
+    })
+  }, [authed, router])
 
   async function saveTradingDefaults(e: FormEvent) {
     e.preventDefault()
@@ -52,22 +44,20 @@ export default function SettingsPage() {
       setSaving(false)
       return
     }
-    const res = await fetch("/api/settings/trading", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        defaultFeeUsdt: n,
-        bingxVipTier: vipTier,
-      }),
+    const res = await patchTradingDefaults({
+      defaultFeeUsdt: n,
+      bingxVipTier: vipTier,
     })
     setSaving(false)
     if (!res.ok) {
-      setMsg("Ошибка сохранения")
+      redirectOn401(router, res.status)
+      if (res.status !== 401) setMsg(res.error ?? "Ошибка сохранения")
       return
     }
-    const data: TradingDefaults = await res.json()
+    const data = res.data
     setDefaultFee(String(data.defaultFeeUsdt))
     setVipTier(Math.min(BINGX_VIP_MAX_TIER, Math.max(0, Math.round(Number(data.bingxVipTier) || 0))))
+    setMaxLev(data.maxLeverage ?? 150)
     setMsg("Сохранено")
   }
 
@@ -75,6 +65,13 @@ export default function SettingsPage() {
 
   const commissionsHint =
     "Уровень VIP BingX задаёт maker/taker в bps (номинал × bps / 10 000 на каждую ногу сделки). Официальные ставки на бирже: https://bingx.com/fee — в приложении ориентир по уровням; при расхождении сверяйте с таблицей биржи."
+
+  if (gate === "loading") {
+    return <div className="text-gray-400">Загрузка…</div>
+  }
+  if (gate === "guest") {
+    return null
+  }
 
   return (
     <div className="text-white">

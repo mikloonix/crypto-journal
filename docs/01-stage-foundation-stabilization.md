@@ -4,7 +4,7 @@
 
 ## Результат этапа (Definition of Done)
 
-- Одна корневая структура App Router (**только `src/app/`** или **только `app/`**; рекомендуется `src/app/`)
+- Одна корневая структура App Router (**только `app/`**)
 - Один конфиг Next (`next.config.*`) и предсказуемая сборка
 - Алиасы TypeScript соответствуют реальной структуре (`@/*` указывает в одно место)
 - Prisma схема, миграции, API и UI используют **одну** модель Trade (без несовпадающих полей)
@@ -91,6 +91,6 @@
 
 - PR/коммит: “foundation stabilization”
 - Обновленный README
-- Единые `src/app`, `src/lib`, `src/components`
+- `app/` + `src/lib`, `src/components`, `src/types`
 - Рабочий login + защищенный `/dashboard`
 
