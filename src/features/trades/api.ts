@@ -8,6 +8,24 @@ import type {
 } from "@/contracts/trades"
 import { fetchEnvelope } from "@/lib/api-fetch"
 
+export function getJournalSymbols(query?: { status?: "OPEN" | "CLOSED" }) {
+  const qs = new URLSearchParams()
+  if (query?.status) qs.set("status", query.status)
+  const suffix = qs.toString() ? `?${qs}` : ""
+  return fetchEnvelope<{ symbols: string[] }>(`/api/trades/symbols${suffix}`, {
+    cache: "no-store",
+  })
+}
+
+export function getJournalStrategyValues(query?: { status?: "OPEN" | "CLOSED" }) {
+  const qs = new URLSearchParams()
+  if (query?.status) qs.set("status", query.status)
+  const suffix = qs.toString() ? `?${qs}` : ""
+  return fetchEnvelope<{ strategies: string[] }>(`/api/trades/strategy-values${suffix}`, {
+    cache: "no-store",
+  })
+}
+
 export function getTradesJournal(query?: Record<string, string | undefined | null>) {
   const qs = new URLSearchParams()
   if (query) {

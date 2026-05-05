@@ -6,7 +6,7 @@
 
 **Визуальный стандарт UI:** `UI-GUIDELINES.md`.
 
-**Статус этапа 2** (домен + журнал): выполнен по `02-stage-trades-domain-and-journal.md` (фильтры, группировки, карточки). **Статус этапа 2.3:** выполнен (см. `02_3-stage-architecture-and-api-consistency.md`). Следующий ориентир по разработке — **2.5**.
+**Статус этапа 2** (домен + журнал): выполнен по `02-stage-trades-domain-and-journal.md` (фильтры, группировки, карточки). **Статус этапа 2.3:** выполнен. **Статус этапа 2.5:** выполнен (app shell, счета, справочники, см. `02_5-stage-app-shell-and-settings.md`). Следующий ориентир — **2.6** или **3**.
 
 ## Этапы
 
@@ -15,7 +15,7 @@
 | 1 | `01-stage-foundation-stabilization.md` | фундамент: структура, auth, prisma, безопасность |
 | 2 | `02-stage-trades-domain-and-journal.md` | домен сделок: trade + entries/exits, журнал |
 | 2.3 ✅ | `02_3-stage-architecture-and-api-consistency.md` | слои backend, envelope API, DTO, data flow, декомпозиция UI |
-| 2.5 | `02_5-stage-app-shell-and-settings.md` | app shell, справочники, выбор `Account` |
+| 2.5 ✅ | `02_5-stage-app-shell-and-settings.md` | app shell, справочники, выбор `Account`, `/settings/accounts` + `/settings/catalogs` |
 | 2.6 | `02_6-stage-dashboard-widgets.md` | PnL/ROI за день, цель дня, блок усреднения |
 | 3 | `03-stage-analytics-and-visuals.md` | аналитика + графики (**обязательное** соответствие скринам в `docs/`) |
 | 3.5 | `03_5-stage-portfolio-and-cashflows.md` | портфель, ввод/вывод, equity от депозитов |

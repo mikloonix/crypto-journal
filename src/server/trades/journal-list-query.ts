@@ -9,6 +9,7 @@ const FILTER_KEYS = [
   "from",
   "to",
   "dateBasis",
+  "accountId",
 ] as const
 
 const querySchema = z
@@ -20,6 +21,7 @@ const querySchema = z
     from: z.string().max(40).optional(),
     to: z.string().max(40).optional(),
     dateBasis: z.enum(["createdAt", "closedAt"]).optional(),
+    accountId: z.string().min(1).max(40).optional(),
   })
   .strict()
 
@@ -31,6 +33,7 @@ export type JournalListFilters = {
   dateFrom?: Date
   dateTo?: Date
   dateField: "createdAt" | "closedAt"
+  accountId?: string
 }
 
 export type JournalListParseResult =
@@ -95,6 +98,7 @@ export function parseJournalListQuery(searchParams: URLSearchParams): JournalLis
   if (o.marketType === "FUTURE") filters.marketType = MarketType.FUTURE
   if (dateFrom) filters.dateFrom = dateFrom
   if (dateTo) filters.dateTo = dateTo
+  if (o.accountId?.trim()) filters.accountId = o.accountId.trim()
 
   return { kind: "ok", filters }
 }

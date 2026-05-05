@@ -1,10 +1,12 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import EquityChart from "@/components/EquityChart"
 import { MAX_LEVERAGE_UI } from "@/lib/trading-symbols"
+import { getEmotions, getStrategies } from "@/features/settings/api"
 import { getTradingDefaults, postCloseTrade, postDeleteTrade, postOpenTrade } from "@/features/trades/api"
+import { useActiveAccount } from "@/features/trades/active-account-context"
 import { OpenTradesTable } from "@/features/trades/components/open-trades-table"
 import { DashboardSummaryCards } from "@/features/trades/components/dashboard-summary-cards"
 import { TradeOpenForm, type Liquidity } from "@/features/trades/components/trade-open-form"
@@ -23,7 +25,25 @@ export default function DashboardPage() {
   const router = useRouter()
   const gate = useProtectedPageSession()
   const authed = gate === "authed"
-  const { trades, setTrades, summary, refresh } = useTradesJournal(authed)
+  const {
+    ready: accountReady,
+    journalAllAccounts,
+    resolvedActiveAccountId,
+    activeAccountId,
+  } = useActiveAccount()
+
+  const tradeAccountId = activeAccountId ?? resolvedActiveAccountId
+
+  const listQuery = useMemo(() => {
+    if (journalAllAccounts) return undefined
+    if (!resolvedActiveAccountId) return undefined
+    return { accountId: resolvedActiveAccountId }
+  }, [journalAllAccounts, resolvedActiveAccountId])
+
+  const { trades, setTrades, summary, refresh } = useTradesJournal(
+    authed && accountReady,
+    listQuery,
+  )
 
   const [symbol, setSymbol] = useState("BTCUSDT")
   const [direction, setDirection] = useState<"LONG" | "SHORT">("LONG")
@@ -40,6 +60,8 @@ export default function DashboardPage() {
     takerFeeBps: 5,
     maxLeverage: MAX_LEVERAGE_UI,
   })
+  const [strategyNames, setStrategyNames] = useState<string[]>([])
+  const [emotionNames, setEmotionNames] = useState<string[]>([])
   const [entryLiquidity, setEntryLiquidity] = useState<Liquidity>("TAKER")
   const [exitLiquidityById, setExitLiquidityById] = useState<Record<string, Liquidity>>({})
   const [exitPriceById, setExitPriceById] = useState<Record<string, string>>({})
@@ -64,6 +86,16 @@ export default function DashboardPage() {
   }, [authed])
 
   useEffect(() => {
+    if (!authed || !accountReady) return
+    void getStrategies().then((r) => {
+      if (r.ok) setStrategyNames(r.data.strategies.map((s) => s.name))
+    })
+    void getEmotions().then((r) => {
+      if (r.ok) setEmotionNames(r.data.emotions.map((e) => e.name))
+    })
+  }, [authed, accountReady])
+
+  useEffect(() => {
     setLeverage((l) =>
       Math.min(Math.max(1, l), tradingDefaults.maxLeverage || MAX_LEVERAGE_UI),
     )
@@ -71,11 +103,21 @@ export default function DashboardPage() {
 
   if (gate === "loading") {
     return (
-      <div className="flex min-h-screen items-center justify-center text-gray-400">Загрузка…</div>
+      <div className="flex min-h-[40vh] items-center justify-center text-[var(--text-secondary)]">
+        Загрузка…
+      </div>
     )
   }
   if (gate === "guest") {
     return null
+  }
+
+  if (!accountReady || !tradeAccountId) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center text-[var(--text-secondary)]">
+        Подготовка счёта…
+      </div>
+    )
   }
 
   const balance = summary?.balanceEstimateUsdt ?? 0
@@ -97,6 +139,7 @@ export default function DashboardPage() {
     }
 
     const openBody: Record<string, unknown> = {
+      accountId: tradeAccountId,
       symbol: symbol.trim(),
       direction,
       price: p,
@@ -203,7 +246,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black p-6 text-white">
+    <div className="text-[var(--text-primary)]">
       <TradeOpenForm
         symbol={symbol}
         setSymbol={setSymbol}
@@ -226,6 +269,9 @@ export default function DashboardPage() {
         entryLiquidity={entryLiquidity}
         setEntryLiquidity={setEntryLiquidity}
         tradingDefaults={tradingDefaults}
+        strategyOptions={strategyNames}
+        emotionOptions={emotionNames}
+        formInstanceId="dashboard"
         onSubmit={addTrade}
       />
 
@@ -257,6 +303,7 @@ export default function DashboardPage() {
         closeTrade={closeTrade}
         deleteTrade={deleteTrade}
         setExitVolumeFraction={setExitVolumeFraction}
+        emotionExitOptions={emotionNames}
       />
     </div>
   )

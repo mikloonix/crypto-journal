@@ -2,13 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+/* UI-GUIDELINES.md — Nansen-style токены (этап 2.5) */
 :root {
-  --background: #0a0a0a;
-  --foreground: #ededed;
+  --background: #0b0f1f;
+  --surface: #1a1f2e;
+  --surface-elevated: #262c3f;
+  --border: #2a3040;
+  --text-primary: #ffffff;
+  --text-secondary: #8e98b3;
+  --accent-green: #00d395;
+  --accent-red: #ff4d6d;
+  --accent-blue: #2b7fff;
+  --warning: #ffb443;
+  --foreground: var(--text-primary);
 }
 
 body {
   background: var(--background);
-  color: var(--foreground);
+  color: var(--text-primary);
 }
-

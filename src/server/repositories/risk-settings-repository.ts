@@ -20,6 +20,8 @@ export const riskSettingsRepository = {
       makerFeeBps?: number
       takerFeeBps?: number
       bingxVipTier?: number
+      activeAccountId?: string | null
+      journalAllAccounts?: boolean
     },
   ) {
     return prisma.riskSettings.upsert({
@@ -29,6 +31,18 @@ export const riskSettingsRepository = {
         userId,
         ...riskSettingsCreateDefaults,
         ...update,
+      },
+    })
+  },
+
+  setActiveAccountId(userId: string, activeAccountId: string | null) {
+    return prisma.riskSettings.upsert({
+      where: { userId },
+      update: { activeAccountId },
+      create: {
+        userId,
+        ...riskSettingsCreateDefaults,
+        activeAccountId,
       },
     })
   },

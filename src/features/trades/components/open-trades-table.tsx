@@ -26,6 +26,8 @@ type Props = {
   closeTrade: (_id: string) => void
   deleteTrade: (_id: string) => void
   setExitVolumeFraction: (_tradeId: string, _remaining: number, _fraction: number) => void
+  /** Справочник эмоций (выход) */
+  emotionExitOptions?: string[]
 }
 
 export function OpenTradesTable({
@@ -47,6 +49,7 @@ export function OpenTradesTable({
   closeTrade,
   deleteTrade,
   setExitVolumeFraction,
+  emotionExitOptions = [],
 }: Props) {
   return (
     <div className="overflow-x-auto">
@@ -183,9 +186,16 @@ export function OpenTradesTable({
                             onChange={(e) =>
                               setEmotionExitById((prev) => ({ ...prev, [t.id]: e.target.value }))
                             }
+                            list={`cj-emotion-exit-${t.id}`}
+                            autoComplete="off"
                             placeholder="Эмоции выхода"
-                            className="bg-gray-800 px-2 py-1 rounded border border-gray-700 text-xs w-36"
+                            className="w-36 rounded border border-[var(--border)] bg-[var(--surface-elevated)] px-2 py-1 text-xs"
                           />
+                          <datalist id={`cj-emotion-exit-${t.id}`}>
+                            {emotionExitOptions.map((n) => (
+                              <option key={n} value={n} />
+                            ))}
+                          </datalist>
                           <input
                             value={feeById[t.id] ?? ""}
                             onChange={(e) =>

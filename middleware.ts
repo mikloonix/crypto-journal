@@ -34,6 +34,7 @@ export const config = {
     "/analytics/:path*",
     "/portfolio/:path*",
     "/risk/:path*",
+    "/settings",
     "/settings/:path*",
     "/trash",
     "/trash/:path*",

@@ -37,6 +37,10 @@ type Props = {
   entryLiquidity: Liquidity
   setEntryLiquidity: Dispatch<SetStateAction<Liquidity>>
   tradingDefaults: TradeOpenFormDefaults
+  /** Имена из справочника (Настройки → стратегии / эмоции) */
+  strategyOptions?: string[]
+  emotionOptions?: string[]
+  formInstanceId?: string
   onSubmit: () => void
 }
 
@@ -62,6 +66,9 @@ export function TradeOpenForm({
   entryLiquidity,
   setEntryLiquidity,
   tradingDefaults,
+  strategyOptions = [],
+  emotionOptions = [],
+  formInstanceId = "main",
   onSubmit,
 }: Props) {
   const entryNotional =
@@ -162,18 +169,32 @@ export function TradeOpenForm({
         <input
           value={strategy}
           onChange={(e) => setStrategy(e.target.value)}
-          className="bg-gray-800 p-2 w-full rounded border border-gray-700"
-          placeholder="Напр. breakout / mean reversion"
+          list={`cj-strategy-${formInstanceId}`}
+          autoComplete="off"
+          className="w-full rounded border border-[var(--border)] bg-[var(--surface-elevated)] p-2"
+          placeholder="Из списка или свой текст"
         />
+        <datalist id={`cj-strategy-${formInstanceId}`}>
+          {strategyOptions.map((s) => (
+            <option key={s} value={s} />
+          ))}
+        </datalist>
       </div>
       <div className="lg:col-span-2">
         <label className="text-sm text-gray-400">Эмоции при открытии</label>
         <input
           value={emotionEntry}
           onChange={(e) => setEmotionEntry(e.target.value)}
-          className="bg-gray-800 p-2 w-full rounded border border-gray-700"
-          placeholder="Спокойствие / FOMO / страх и т.п."
+          list={`cj-emotion-entry-${formInstanceId}`}
+          autoComplete="off"
+          className="w-full rounded border border-[var(--border)] bg-[var(--surface-elevated)] p-2"
+          placeholder="Из списка или свой текст"
         />
+        <datalist id={`cj-emotion-entry-${formInstanceId}`}>
+          {emotionOptions.map((s) => (
+            <option key={s} value={s} />
+          ))}
+        </datalist>
       </div>
       <div className="lg:col-span-2">
         <div className="flex items-center gap-1.5">

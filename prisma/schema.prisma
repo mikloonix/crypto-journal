@@ -27,6 +27,11 @@ enum LiquidityRole {
   TAKER
 }
 
+enum AccountSource {
+  MANUAL
+  BINGX
+}
+
 model User {
   id            String         @id @default(cuid())
   email         String         @unique
@@ -36,8 +41,65 @@ model User {
   updatedAt     DateTime       @updatedAt
   trades        Trade[]
   riskSettings  RiskSettings?
-  
+  accounts      Account[]
+  strategies    Strategy[]
+  emotions      Emotion[]
+
   @@map("users")
+}
+
+/// Торговый счёт (субсчёт); этап 2.5 — выбор перед вводом сделки и фильтр журнала.
+model Account {
+  id        String         @id @default(cuid())
+  userId    String
+  name      String
+  isDefault Boolean        @default(false)
+  /// Ручной учёт или привязка к API (BingX — позже).
+  source    AccountSource @default(MANUAL)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trades Trade[]
+
+  riskSettingsActive RiskSettings[] @relation("RiskSettingsActiveAccount")
+
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Strategy {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  sortOrder Int      @default(0)
+  /// Интервал анализа (напр. 15m, 1H, 4H).
+  timeframe String?
+  /// Кратко: тип сетапа / правило входа.
+  setup     String?
+  /// Стоп, R, правила управления позицией.
+  riskNote  String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("strategies")
+}
+
+model Emotion {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("emotions")
 }
 
 model RiskSettings {
@@ -55,42 +117,50 @@ model RiskSettings {
   takerFeeBps    Float    @default(5)
   // 0..5 — ориентир BingX VIP; при смене пересчитываются maker/taker bps в приложении
   bingxVipTier   Int      @default(0)
-  updatedAt      DateTime @updatedAt
-  
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  /// Активный счёт для новых сделок и журнала (этап 2.5)
+  activeAccountId String?
+  /// Показывать в журнале (открытые/дашборд) все счета; новые сделки всё равно на activeAccountId.
+  journalAllAccounts Boolean @default(false)
+  updatedAt          DateTime @updatedAt
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeAccount Account? @relation("RiskSettingsActiveAccount", fields: [activeAccountId], references: [id], onDelete: SetNull)
+
   @@map("risk_settings")
 }
 
 model Trade {
   id            String      @id @default(cuid())
   userId        String
+  accountId     String?
   symbol        String
   marketType    MarketType  @default(FUTURE)
   direction     Direction
   status        TradeStatus @default(OPEN)
-  
-  entries       Entry[]
-  exits         Exit[]
-  
-  strategy      String?
-  emotionEntry  String?
-  emotionExit   String?
-  notes         String?
-  
-  fee           Float       @default(0)
-  funding       Float       @default(0)
-  
-  createdAt     DateTime    @default(now())
-  closedAt      DateTime?
-  updatedAt     DateTime    @updatedAt
+
+  entries Entry[]
+  exits   Exit[]
+
+  strategy     String?
+  emotionEntry String?
+  emotionExit  String?
+  notes        String?
+
+  fee     Float @default(0)
+  funding Float @default(0)
+
+  createdAt DateTime  @default(now())
+  closedAt  DateTime?
+  updatedAt DateTime  @updatedAt
   /// В корзине (soft delete); null = активен
-  deletedAt     DateTime?
-  
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  deletedAt DateTime?
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
   @@index([userId, status])
   @@index([userId, deletedAt])
+  @@index([userId, accountId])
   @@map("trades")
 }
 

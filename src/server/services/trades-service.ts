@@ -7,6 +7,7 @@ import {
   parseLiquidityRole,
 } from "@/lib/bingx-fees"
 import { sumEntryVolume, sumExitVolume } from "@/lib/trade-volumes"
+import { accountRepository } from "@/server/repositories/account-repository"
 import { tradesRepository } from "@/server/repositories/trades-repository"
 import { riskSettingsRepository } from "@/server/repositories/risk-settings-repository"
 import { exitRepository } from "@/server/repositories/exit-repository"
@@ -43,7 +44,36 @@ function packSingle(row: TradeWithLegs): TradeWithJournal {
   return attachJournalToTradesList([row])[0]!
 }
 
+async function resolveAccountIdForOpen(
+  userId: string,
+  body: Record<string, unknown>,
+): Promise<string | null> {
+  const raw = body.accountId
+  if (raw != null && String(raw).trim() !== "") {
+    const id = String(raw).trim()
+    const a = await accountRepository.findFirst(userId, id)
+    if (a) return a.id
+  }
+  await accountRepository.ensureDefaultAndBackfill(userId)
+  const rs = await riskSettingsRepository.upsertDefaults(userId)
+  if (rs.activeAccountId) {
+    const a = await accountRepository.findFirst(userId, rs.activeAccountId)
+    if (a) return a.id
+  }
+  const list = await accountRepository.listByUser(userId)
+  const def = list.find((x) => x.isDefault) ?? list[0]
+  return def?.id ?? null
+}
+
 export const tradesService = {
+  async listDistinctSymbols(userId: string, status?: TradeStatus): Promise<string[]> {
+    return tradesRepository.distinctSymbols(userId, status)
+  },
+
+  async listDistinctStrategies(userId: string, status?: TradeStatus): Promise<string[]> {
+    return tradesRepository.distinctStrategies(userId, status)
+  },
+
   async listJournal(userId: string, parsed: JournalListQueryForService): Promise<TradesJournalListDto> {
     const raw =
       parsed.kind === "none"
@@ -83,6 +113,15 @@ export const tradesService = {
       }
     }
 
+    const accountId = await resolveAccountIdForOpen(userId, body)
+    if (!accountId) {
+      return {
+        ok: false,
+        error: "Не удалось определить счёт. Откройте Настройки → Счета.",
+        status: 400,
+      }
+    }
+
     const settings = await riskSettingsRepository.upsertDefaults(userId)
     const makerBps = Number(settings.makerFeeBps) || BINGX_DEFAULT_MAKER_FEE_BPS
     const takerBps = Number(settings.takerFeeBps) || BINGX_DEFAULT_TAKER_FEE_BPS
@@ -102,7 +141,13 @@ export const tradesService = {
         ? Number(body.funding)
         : 0
 
-    const existing = await tradesRepository.findOpenTradeId(userId, symbol, direction, marketType)
+    const existing = await tradesRepository.findOpenTradeId(
+      userId,
+      accountId,
+      symbol,
+      direction,
+      marketType,
+    )
 
     const levRaw = body.leverage != null ? Number(body.leverage) : NaN
     const entryCreate = {
@@ -128,6 +173,7 @@ export const tradesService = {
         })
       : await tradesRepository.createTradeWithEntry({
           userId,
+          accountId,
           symbol,
           marketType,
           direction,

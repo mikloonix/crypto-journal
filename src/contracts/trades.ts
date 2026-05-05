@@ -67,6 +67,7 @@ export type JournalSummaryDto = {
 export type TradeListItemDto = {
   id: string
   userId: string
+  accountId: string | null
   symbol: string
   marketType: MarketTypeDto
   direction: DirectionDto
@@ -97,6 +98,10 @@ export type TradingDefaultsDto = {
   takerFeeBps: number
   bingxVipTier: number
   maxLeverage: number
+  /** Активный счёт для ввода сделок и журнала (этап 2.5) */
+  activeAccountId: string | null
+  /** Журнал по всем счетам (шапка «Все счета») */
+  journalAllAccounts: boolean
 }
 
 /** Корзина: у удалённого выхода `trade` без этого выхода в `exits` — для legJournal собирается на сервере. */

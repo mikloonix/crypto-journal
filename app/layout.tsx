@@ -30,7 +30,7 @@ export default function RootLayout({
       lang="ru"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
     >
-      <body className="min-h-full flex flex-col bg-black text-white">
+      <body className="flex min-h-full flex-col bg-[var(--background)] text-[var(--text-primary)]">
         <Providers>
           <AppHeader />
           <main className="mx-auto w-full max-w-6xl px-4 py-6">{children}</main>

@@ -34,10 +34,40 @@ function buildJournalListWhere(userId: string, filters: JournalListFilters): Pri
       w.createdAt = range
     }
   }
+  if (filters.accountId) {
+    w.accountId = filters.accountId
+  }
   return w
 }
 
 export const tradesRepository = {
+  distinctSymbols(userId: string, status?: TradeStatus) {
+    return prisma.trade.findMany({
+      where: {
+        ...whereActiveTrades(userId),
+        ...(status ? { status } : {}),
+      },
+      select: { symbol: true },
+      distinct: ["symbol"],
+      orderBy: { symbol: "asc" },
+    }).then((rows) => rows.map((r) => r.symbol))
+  },
+
+  distinctStrategies(userId: string, status?: TradeStatus) {
+    return prisma.trade.findMany({
+      where: {
+        ...whereActiveTrades(userId),
+        ...(status ? { status } : {}),
+        strategy: { not: null },
+      },
+      select: { strategy: true },
+      distinct: ["strategy"],
+      orderBy: { strategy: "asc" },
+    }).then((rows) =>
+      rows.map((r) => r.strategy).filter((s): s is string => s != null && s !== ""),
+    )
+  },
+
   findManyActiveWithLegs(userId: string) {
     return prisma.trade.findMany({
       where: whereActiveTrades(userId),
@@ -61,10 +91,17 @@ export const tradesRepository = {
     })
   },
 
-  findOpenTradeId(userId: string, symbol: string, direction: Direction, marketType: MarketType) {
+  findOpenTradeId(
+    userId: string,
+    accountId: string,
+    symbol: string,
+    direction: Direction,
+    marketType: MarketType,
+  ) {
     return prisma.trade.findFirst({
       where: {
         ...whereActiveTrades(userId),
+        accountId,
         symbol,
         direction,
         marketType,
@@ -105,6 +142,7 @@ export const tradesRepository = {
 
   createTradeWithEntry(params: {
     userId: string
+    accountId: string
     symbol: string
     marketType: MarketType
     direction: Direction
@@ -123,6 +161,7 @@ export const tradesRepository = {
   }) {
     const {
       userId,
+      accountId,
       symbol,
       marketType,
       direction,
@@ -136,6 +175,7 @@ export const tradesRepository = {
     return prisma.trade.create({
       data: {
         userId,
+        accountId,
         symbol,
         marketType,
         direction,

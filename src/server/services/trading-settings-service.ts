@@ -1,6 +1,7 @@
 import { MAX_LEVERAGE_UI } from "@/lib/trading-symbols"
 import { BINGX_VIP_MAX_TIER, feeBpsForVipTier } from "@/lib/bingx-vip"
 import type { TradingDefaultsDto } from "@/contracts/trades"
+import { accountRepository } from "@/server/repositories/account-repository"
 import { riskSettingsRepository } from "@/server/repositories/risk-settings-repository"
 
 export const tradingSettingsService = {
@@ -12,6 +13,8 @@ export const tradingSettingsService = {
       takerFeeBps: row.takerFeeBps,
       bingxVipTier: row.bingxVipTier,
       maxLeverage: MAX_LEVERAGE_UI,
+      activeAccountId: row.activeAccountId ?? null,
+      journalAllAccounts: row.journalAllAccounts ?? false,
     }
   },
 
@@ -39,6 +42,24 @@ export const tradingSettingsService = {
     const vipTier =
       vipRaw === null || vipRaw === undefined || vipRaw === "" ? undefined : Number(vipRaw)
 
+    const activeRaw = body.activeAccountId
+    let activeAccountId: string | null | undefined
+    if (activeRaw === null) {
+      activeAccountId = null
+    } else if (activeRaw !== undefined && activeRaw !== "") {
+      activeAccountId = String(activeRaw).trim()
+    }
+
+    const journalAllRaw = body.journalAllAccounts
+    let journalAllAccounts: boolean | undefined
+    if (journalAllRaw === true || journalAllRaw === false) {
+      journalAllAccounts = journalAllRaw
+    } else if (journalAllRaw != null && journalAllRaw !== "") {
+      const s = String(journalAllRaw).toLowerCase()
+      if (s === "true" || s === "1") journalAllAccounts = true
+      if (s === "false" || s === "0") journalAllAccounts = false
+    }
+
     if (
       defaultFeeUsdt !== undefined &&
       (!Number.isFinite(defaultFeeUsdt) || defaultFeeUsdt < 0)
@@ -62,11 +83,20 @@ export const tradingSettingsService = {
       }
     }
 
+    if (activeAccountId !== undefined && activeAccountId !== null) {
+      const acc = await accountRepository.findFirst(userId, activeAccountId)
+      if (!acc) {
+        return { ok: false, error: "Неверный счёт", status: 400 }
+      }
+    }
+
     const updateData: {
       defaultFeeUsdt?: number
       makerFeeBps?: number
       takerFeeBps?: number
       bingxVipTier?: number
+      activeAccountId?: string | null
+      journalAllAccounts?: boolean
     } = {}
 
     if (vipTier !== undefined) {
@@ -79,6 +109,12 @@ export const tradingSettingsService = {
     if (defaultFeeUsdt !== undefined) updateData.defaultFeeUsdt = defaultFeeUsdt
     if (makerFeeBps !== undefined) updateData.makerFeeBps = makerFeeBps
     if (takerFeeBps !== undefined) updateData.takerFeeBps = takerFeeBps
+    if (activeAccountId !== undefined) {
+      updateData.activeAccountId = activeAccountId
+    }
+    if (journalAllAccounts !== undefined) {
+      updateData.journalAllAccounts = journalAllAccounts
+    }
 
     if (Object.keys(updateData).length === 0) {
       return { ok: false, error: "No fields to update", status: 400 }
@@ -94,6 +130,8 @@ export const tradingSettingsService = {
         takerFeeBps: row.takerFeeBps,
         bingxVipTier: row.bingxVipTier,
         maxLeverage: MAX_LEVERAGE_UI,
+        activeAccountId: row.activeAccountId ?? null,
+        journalAllAccounts: row.journalAllAccounts ?? false,
       },
     }
   },

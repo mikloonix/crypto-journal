@@ -48,6 +48,7 @@ export function serializeTradeListItem(t: TradeWithJournal): TradeListItemDto {
   return {
     id: t.id,
     userId: t.userId,
+    accountId: t.accountId ?? null,
     symbol: t.symbol,
     marketType: t.marketType as MarketTypeDto,
     direction: t.direction as DirectionDto,

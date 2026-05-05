@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useEffect, useMemo, useState } from "react"
+import { Fragment, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   endOfDay,
@@ -12,10 +12,15 @@ import {
 } from "date-fns"
 import type { ExitDto, TradeListItemDto } from "@/contracts/trades"
 import { ClosedTradesMobileCards } from "@/features/trades/components/closed-trades-mobile-cards"
-import { postDeleteTrade } from "@/features/trades/api"
+import { getJournalStrategyValues, getJournalSymbols, postDeleteTrade } from "@/features/trades/api"
+import {
+  HEADER_ALL_ACCOUNTS_VALUE,
+  useActiveAccount,
+} from "@/features/trades/active-account-context"
 import { useProtectedPageSession } from "@/features/trades/hooks/use-protected-page-session"
 import { useTradesJournal } from "@/features/trades/hooks/use-trades-journal"
 import {
+  groupClosedExitsByPeriod,
   groupClosedTradesByPeriod,
   type JournalGroupMode,
 } from "@/features/trades/journal-grouping"
@@ -30,7 +35,22 @@ type ExitRow = { exit: ExitDto; trade: TradeListItemDto }
 
 type PeriodPreset = "all" | "today" | "week" | "month" | "custom"
 
-const TRADES_COL_SPAN = 17
+const TRADES_COL_SPAN = 18
+function formatGroupAggPnl(trades: TradeListItemDto[], sumPnl: number): string {
+  const qs = new Set(trades.map((t) => quoteCurrencyFromSymbol(t.symbol)))
+  if (qs.size === 1) {
+    return formatInQuote(sumPnl, [...qs][0]!)
+  }
+  return formatDecimal(sumPnl)
+}
+
+function formatExitGroupAggPnl(rows: ExitRow[], sumPnl: number): string {
+  const qs = new Set(rows.map((r) => quoteCurrencyFromSymbol(r.trade.symbol)))
+  if (qs.size === 1) {
+    return formatInQuote(sumPnl, [...qs][0]!)
+  }
+  return formatDecimal(sumPnl)
+}
 
 function periodToRange(
   preset: PeriodPreset,
@@ -62,6 +82,32 @@ export default function ClosedTradesPage() {
   const router = useRouter()
   const gate = useProtectedPageSession()
   const authed = gate === "authed"
+  const {
+    ready: accountReady,
+    journalAllAccounts,
+    resolvedActiveAccountId,
+    accounts,
+  } = useActiveAccount()
+
+  /** Фильтр счёта только для страницы «Закрытые» (не связан с шапкой). */
+  const [closedAccountFilter, setClosedAccountFilter] = useState<string | null>(null)
+  const closedAccountSeeded = useRef(false)
+
+  useEffect(() => {
+    if (!accountReady || closedAccountSeeded.current) return
+    closedAccountSeeded.current = true
+    setClosedAccountFilter(
+      journalAllAccounts
+        ? HEADER_ALL_ACCOUNTS_VALUE
+        : (resolvedActiveAccountId ?? HEADER_ALL_ACCOUNTS_VALUE),
+    )
+  }, [accountReady, journalAllAccounts, resolvedActiveAccountId])
+
+  const effectiveClosedAccount =
+    closedAccountFilter ??
+    (journalAllAccounts
+      ? HEADER_ALL_ACCOUNTS_VALUE
+      : (resolvedActiveAccountId ?? HEADER_ALL_ACCOUNTS_VALUE))
 
   const [periodPreset, setPeriodPreset] = useState<PeriodPreset>("all")
   const [customFrom, setCustomFrom] = useState("")
@@ -70,6 +116,8 @@ export default function ClosedTradesPage() {
   const [filterStrategy, setFilterStrategy] = useState("")
   const [filterMarket, setFilterMarket] = useState<"" | "SPOT" | "FUTURE">("")
   const [groupMode, setGroupMode] = useState<JournalGroupMode>("none")
+  const [closedSymbols, setClosedSymbols] = useState<string[]>([])
+  const [closedStrategies, setClosedStrategies] = useState<string[]>([])
 
   const listQuery = useMemo(() => {
     const q: Record<string, string> = {
@@ -82,10 +130,24 @@ export default function ClosedTradesPage() {
     if (filterSymbol.trim()) q.symbol = filterSymbol.trim()
     if (filterStrategy.trim()) q.strategy = filterStrategy.trim()
     if (filterMarket) q.marketType = filterMarket
+    if (
+      effectiveClosedAccount !== HEADER_ALL_ACCOUNTS_VALUE &&
+      effectiveClosedAccount
+    ) {
+      q.accountId = effectiveClosedAccount
+    }
     return q
-  }, [periodPreset, customFrom, customTo, filterSymbol, filterStrategy, filterMarket])
+  }, [
+    periodPreset,
+    customFrom,
+    customTo,
+    filterSymbol,
+    filterStrategy,
+    filterMarket,
+    effectiveClosedAccount,
+  ])
 
-  const { trades, setTrades, refresh } = useTradesJournal(authed, listQuery)
+  const { trades, setTrades, refresh } = useTradesJournal(authed && accountReady, listQuery)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [view, setView] = useState<ViewMode>("trades")
 
@@ -126,6 +188,16 @@ export default function ClosedTradesPage() {
     return () => document.removeEventListener("visibilitychange", onVisible)
   }, [authed, refresh])
 
+  useEffect(() => {
+    if (!authed || !accountReady) return
+    void getJournalSymbols({ status: "CLOSED" }).then((r) => {
+      if (r.ok) setClosedSymbols(r.data.symbols)
+    })
+    void getJournalStrategyValues({ status: "CLOSED" }).then((r) => {
+      if (r.ok) setClosedStrategies(r.data.strategies)
+    })
+  }, [authed, accountReady])
+
   const exitRows: ExitRow[] = useMemo(() => {
     const rows: ExitRow[] = []
     for (const t of trades) {
@@ -139,15 +211,24 @@ export default function ClosedTradesPage() {
     return rows
   }, [trades])
 
+  const groupedExits = useMemo(
+    () => groupClosedExitsByPeriod(exitRows, groupMode),
+    [exitRows, groupMode],
+  )
+
   if (gate === "loading") {
-    return <div className="text-gray-400">Загрузка…</div>
+    return <div className="text-[var(--text-secondary)]">Загрузка…</div>
   }
   if (gate === "guest") {
     return null
   }
 
+  if (!accountReady) {
+    return <div className="text-[var(--text-secondary)]">Подготовка счёта…</div>
+  }
+
   return (
-    <div className="text-white">
+    <div className="text-[var(--text-primary)]">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Закрытые</h1>
         <div className="flex flex-wrap items-center gap-2">
@@ -164,7 +245,7 @@ export default function ClosedTradesPage() {
               onClick={() => setView("exits")}
               className={`rounded px-3 py-1 ${view === "exits" ? "bg-gray-700 text-white" : "text-gray-400"}`}
             >
-              Сделки (выходы)
+              Сделки
             </button>
           </div>
           <button
@@ -224,18 +305,43 @@ export default function ClosedTradesPage() {
           </div>
         )}
         <div className="flex flex-wrap gap-2 gap-y-2">
+          <select
+            value={effectiveClosedAccount}
+            onChange={(e) => setClosedAccountFilter(e.target.value)}
+            className="rounded border border-[var(--border)] bg-[var(--surface-elevated)] px-2 py-1 text-[var(--text-primary)]"
+            aria-label="Фильтр по счёту (только закрытые)"
+          >
+            <option value={HEADER_ALL_ACCOUNTS_VALUE}>Все счета</option>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.isDefault ? `${a.name} (по умолч.)` : a.name}
+              </option>
+            ))}
+          </select>
           <input
             value={filterSymbol}
             onChange={(e) => setFilterSymbol(e.target.value)}
             placeholder="Символ"
+            list="closed-trades-symbols"
             className="w-32 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-gray-200"
           />
+          <datalist id="closed-trades-symbols">
+            {closedSymbols.map((sym) => (
+              <option key={sym} value={sym} />
+            ))}
+          </datalist>
           <input
             value={filterStrategy}
             onChange={(e) => setFilterStrategy(e.target.value)}
             placeholder="Стратегия"
+            list="closed-trades-strategies"
             className="w-40 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-gray-200"
           />
+          <datalist id="closed-trades-strategies">
+            {closedStrategies.map((s) => (
+              <option key={s} value={s} />
+            ))}
+          </datalist>
           <select
             value={filterMarket}
             onChange={(e) => setFilterMarket(e.target.value as "" | "SPOT" | "FUTURE")}
@@ -245,22 +351,20 @@ export default function ClosedTradesPage() {
             <option value="SPOT">SPOT</option>
             <option value="FUTURE">FUTURE</option>
           </select>
-          {view === "trades" && (
-            <>
-              <span className="self-center text-gray-600">|</span>
-              <span className="self-center text-gray-500">Группировка:</span>
-              <select
-                value={groupMode}
-                onChange={(e) => setGroupMode(e.target.value as JournalGroupMode)}
-                className="rounded border border-gray-700 bg-gray-900 px-2 py-1 text-gray-200"
-              >
-                <option value="none">Нет</option>
-                <option value="day">По дням</option>
-                <option value="week">По неделям</option>
-                <option value="month">По месяцам</option>
-              </select>
-            </>
-          )}
+          <>
+            <span className="self-center text-gray-600">|</span>
+            <span className="self-center text-gray-500">Группировка:</span>
+            <select
+              value={groupMode}
+              onChange={(e) => setGroupMode(e.target.value as JournalGroupMode)}
+              className="rounded border border-gray-700 bg-gray-900 px-2 py-1 text-gray-200"
+            >
+              <option value="none">Нет</option>
+              <option value="day">По дням</option>
+              <option value="week">По неделям</option>
+              <option value="month">По месяцам</option>
+            </select>
+          </>
         </div>
       </div>
 
@@ -269,7 +373,8 @@ export default function ClosedTradesPage() {
           {/* max-md + md: дублируем на странице: классы из app/ всегда в бандле Tailwind */}
           <div className="block md:hidden">
             <ClosedTradesMobileCards
-              trades={trades}
+              groups={groupedTrades}
+              groupMode={groupMode}
               expanded={expanded}
               setExpanded={setExpanded}
               onDeleteTrade={deleteTradeToTrash}
@@ -282,6 +387,7 @@ export default function ClosedTradesPage() {
                   <th className="py-2 pr-2">Символ</th>
                   <th className="py-2 pr-2">Рынок</th>
                   <th className="py-2 pr-2">Напр.</th>
+                  <th className="py-2 pr-2">Плечо</th>
                   <th className="py-2 pr-2">Маржа</th>
                   <th className="py-2 pr-2">Вход (ср.)</th>
                   <th className="py-2 pr-2">Выход (ср.)</th>
@@ -304,11 +410,35 @@ export default function ClosedTradesPage() {
                     {g.label ? (
                       <tr className="bg-gray-900/60">
                         <td
-                          colSpan={TRADES_COL_SPAN}
+                          colSpan={7}
                           className="py-2 pl-2 text-xs font-medium uppercase tracking-wide text-gray-500"
                         >
                           {g.label}
                         </td>
+                        <td
+                          className={`py-2 pr-2 text-xs font-normal normal-case ${
+                            g.sumPnl > 0
+                              ? "text-green-400"
+                              : g.sumPnl < 0
+                                ? "text-red-400"
+                                : "text-gray-300"
+                          }`}
+                        >
+                          PnL: {formatGroupAggPnl(g.trades, g.sumPnl)}
+                        </td>
+                        <td
+                          className={`py-2 pr-2 text-xs font-normal normal-case ${
+                            g.groupRoiPct != null && g.groupRoiPct > 0
+                              ? "text-green-400"
+                              : g.groupRoiPct != null && g.groupRoiPct < 0
+                                ? "text-red-400"
+                                : "text-gray-300"
+                          }`}
+                        >
+                          ROI:{" "}
+                          {g.groupRoiPct != null ? `${formatPercent(g.groupRoiPct)}%` : "—"}
+                        </td>
+                        <td colSpan={9} className="py-2" />
                       </tr>
                     ) : null}
                     {g.trades.map((t) => {
@@ -322,7 +452,16 @@ export default function ClosedTradesPage() {
                           <tr className="border-b border-gray-900">
                             <td className="py-2 pr-2">{t.symbol}</td>
                             <td className="py-2 pr-2">{t.marketType}</td>
-                            <td className="py-2 pr-2">{t.direction}</td>
+                            <td
+                              className={`py-2 pr-2 font-medium ${
+                                t.direction === "LONG" ? "text-green-400" : "text-red-400"
+                              }`}
+                            >
+                              {t.direction}
+                            </td>
+                            <td className="py-2 pr-2">
+                              {j.maxLeverage ? `${j.maxLeverage}×` : "—"}
+                            </td>
                             <td className="py-2 pr-2">{formatInQuote(j.entryVolume, q)}</td>
                             <td className="py-2 pr-2">
                               {j.avgEntry ? formatDecimal(j.avgEntry) : "—"}
@@ -517,6 +656,7 @@ export default function ClosedTradesPage() {
                 <th className="py-2 pr-2">Рынок</th>
                 <th className="py-2 pr-2">Трейд</th>
                 <th className="py-2 pr-2">Напр.</th>
+                <th className="py-2 pr-2">Плечо</th>
                 <th className="py-2 pr-2">Вход (ср.)</th>
                 <th className="py-2 pr-2">Выход</th>
                 <th className="py-2 pr-2">Маржа</th>
@@ -532,74 +672,127 @@ export default function ClosedTradesPage() {
               </tr>
             </thead>
             <tbody>
-              {exitRows.map(({ exit: x, trade: t }) => {
-                const q = quoteCurrencyFromSymbol(t.symbol)
-                const pnl = x.legJournal.pnl
-                const roiPct = x.legJournal.roiPct
-                const avgIn = t.journal.avgEntry
-                return (
-                  <tr key={x.id} className="border-b border-gray-900">
-                    <td className="py-2 pr-2 text-gray-400">
-                      {new Date(x.timestamp).toLocaleString()}
-                    </td>
-                    <td className="py-2 pr-2">{t.symbol}</td>
-                    <td className="py-2 pr-2">{t.marketType}</td>
-                    <td className="py-2 pr-2 font-mono text-xs text-gray-500">
-                      {t.id.slice(0, 8)}…
-                    </td>
-                    <td className="py-2 pr-2">{t.direction}</td>
-                    <td className="py-2 pr-2">{avgIn != null ? formatDecimal(avgIn) : "—"}</td>
-                    <td className="py-2 pr-2">{formatDecimal(x.price)}</td>
-                    <td className="py-2 pr-2">{formatInQuote(x.volume, q)}</td>
-                    <td className="py-2 pr-2">{x.liquidityRole}</td>
-                    <td className="py-2 pr-2">
-                      {x.fee != null ? formatInQuote(Number(x.fee), q) : "—"}
-                    </td>
-                    <td className="py-2 pr-2">
-                      {x.funding != null ? formatInQuote(Number(x.funding), q) : "—"}
-                    </td>
-                    <td className={pnl > 0 ? "text-green-400" : pnl < 0 ? "text-red-400" : ""}>
-                      {formatInQuote(pnl, q)}
-                    </td>
-                    <td
-                      className={
-                        roiPct > 0 ? "text-green-400" : roiPct < 0 ? "text-red-400" : ""
-                      }
-                    >
-                      {formatPercent(roiPct)}%
-                    </td>
-                    <td className="max-w-[140px] truncate py-2 pr-2" title={t.strategy ?? ""}>
-                      {t.strategy ?? "—"}
-                    </td>
-                    <td className="max-w-[120px] truncate py-2 pr-2" title={t.emotionEntry ?? ""}>
-                      {t.emotionEntry ?? "—"}
-                    </td>
-                    <td className="max-w-[120px] truncate py-2 pr-2" title={x.emotionExit ?? ""}>
-                      {x.emotionExit ?? "—"}
-                    </td>
-                    <td className="py-2">
-                      <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap">
-                        <button
-                          type="button"
-                          title="Только этот выход"
-                          onClick={() => deleteExitToTrash(t.id, x.id)}
-                          className="rounded bg-gray-700 px-2 py-1 text-xs hover:bg-gray-600"
+              {groupedExits.map((g) => (
+                <Fragment key={g.label || "__ex_all__"}>
+                  {g.label ? (
+                    <tr className="bg-gray-900/60">
+                      <td
+                        colSpan={12}
+                        className="py-2 pl-2 text-xs font-medium uppercase tracking-wide text-gray-500"
+                      >
+                        {g.label}
+                      </td>
+                      <td
+                        className={`py-2 pr-2 text-xs font-normal normal-case ${
+                          g.sumPnl > 0
+                            ? "text-green-400"
+                            : g.sumPnl < 0
+                              ? "text-red-400"
+                              : "text-gray-300"
+                        }`}
+                      >
+                        PnL: {formatExitGroupAggPnl(g.rows, g.sumPnl)}
+                      </td>
+                      <td
+                        className={`py-2 pr-2 text-xs font-normal normal-case ${
+                          g.groupRoiPct != null && g.groupRoiPct > 0
+                            ? "text-green-400"
+                            : g.groupRoiPct != null && g.groupRoiPct < 0
+                              ? "text-red-400"
+                              : "text-gray-300"
+                        }`}
+                      >
+                        ROI:{" "}
+                        {g.groupRoiPct != null ? `${formatPercent(g.groupRoiPct)}%` : "—"}
+                      </td>
+                      <td colSpan={4} className="py-2" />
+                    </tr>
+                  ) : null}
+                  {g.rows.map(({ exit: x, trade: t }) => {
+                    const q = quoteCurrencyFromSymbol(t.symbol)
+                    const pnl = x.legJournal.pnl
+                    const roiPct = x.legJournal.roiPct
+                    const avgIn = t.journal.avgEntry
+                    return (
+                      <tr key={x.id} className="border-b border-gray-900">
+                        <td className="py-2 pr-2 text-gray-400">
+                          {new Date(x.timestamp).toLocaleString()}
+                        </td>
+                        <td className="py-2 pr-2">{t.symbol}</td>
+                        <td className="py-2 pr-2">{t.marketType}</td>
+                        <td className="py-2 pr-2 font-mono text-xs text-gray-500">
+                          {t.id.slice(0, 8)}…
+                        </td>
+                        <td
+                          className={`py-2 pr-2 font-medium ${
+                            t.direction === "LONG" ? "text-green-400" : "text-red-400"
+                          }`}
                         >
-                          Удалить сделку
-                        </button>
-                        <button
-                          type="button"
-                          title="Весь трейд"
-                          onClick={() => deleteTradeToTrash(t.id)}
-                          className="rounded bg-gray-600 px-2 py-1 text-xs hover:bg-gray-500"
+                          {t.direction}
+                        </td>
+                        <td className="py-2 pr-2">
+                          {t.journal.maxLeverage ? `${t.journal.maxLeverage}×` : "—"}
+                        </td>
+                        <td className="py-2 pr-2">{avgIn != null ? formatDecimal(avgIn) : "—"}</td>
+                        <td className="py-2 pr-2">{formatDecimal(x.price)}</td>
+                        <td className="py-2 pr-2">{formatInQuote(x.volume, q)}</td>
+                        <td className="py-2 pr-2">{x.liquidityRole}</td>
+                        <td className="py-2 pr-2">
+                          {x.fee != null ? formatInQuote(Number(x.fee), q) : "—"}
+                        </td>
+                        <td className="py-2 pr-2">
+                          {x.funding != null ? formatInQuote(Number(x.funding), q) : "—"}
+                        </td>
+                        <td className={pnl > 0 ? "text-green-400" : pnl < 0 ? "text-red-400" : ""}>
+                          {formatInQuote(pnl, q)}
+                        </td>
+                        <td
+                          className={
+                            roiPct > 0 ? "text-green-400" : roiPct < 0 ? "text-red-400" : ""
+                          }
                         >
-                          Удалить трейд
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
+                          {formatPercent(roiPct)}%
+                        </td>
+                        <td className="max-w-[140px] truncate py-2 pr-2" title={t.strategy ?? ""}>
+                          {t.strategy ?? "—"}
+                        </td>
+                        <td
+                          className="max-w-[120px] truncate py-2 pr-2"
+                          title={t.emotionEntry ?? ""}
+                        >
+                          {t.emotionEntry ?? "—"}
+                        </td>
+                        <td
+                          className="max-w-[120px] truncate py-2 pr-2"
+                          title={x.emotionExit ?? ""}
+                        >
+                          {x.emotionExit ?? "—"}
+                        </td>
+                        <td className="py-2">
+                          <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap">
+                            <button
+                              type="button"
+                              title="Только этот выход"
+                              onClick={() => deleteExitToTrash(t.id, x.id)}
+                              className="rounded bg-gray-700 px-2 py-1 text-xs hover:bg-gray-600"
+                            >
+                              Удалить сделку
+                            </button>
+                            <button
+                              type="button"
+                              title="Весь трейд"
+                              onClick={() => deleteTradeToTrash(t.id)}
+                              className="rounded bg-gray-600 px-2 py-1 text-xs hover:bg-gray-500"
+                            >
+                              Удалить трейд
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </Fragment>
+              ))}
             </tbody>
           </table>
           {exitRows.length === 0 && (

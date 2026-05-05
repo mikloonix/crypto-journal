@@ -11,11 +11,29 @@ function pickUserIdFromJwt(token: JWT | null): string | null {
   return typeof id === "string" && id.length > 0 ? id : null
 }
 
+async function getTokenFromCookieStore(secret: string): Promise<string | null> {
+  try {
+    const cookieStore = await cookies()
+    const headerList = await headers()
+    const synthetic = {
+      headers: Object.fromEntries(headerList.entries()),
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+      },
+    }
+    const token = await getToken({ req: synthetic as unknown as NextRequest, secret })
+    return pickUserIdFromJwt(token)
+  } catch (e) {
+    console.error("[auth] getToken(cookies):", e)
+    return null
+  }
+}
+
 /**
  * ID пользователя в Route Handlers.
- * 1) JWT из входящего Request (как в middleware) — надёжнее всего для POST /api/*
- * 2) getServerSession
- * 3) getToken по cookies() из next/headers (объект с getAll — как ожидает SessionStore)
+ * В App Router надёжнее всего читать JWT через cookies()/headers() — тот же способ, что у клиентского fetch.
  */
 export async function getAuthenticatedUserId(req?: NextRequest | Request): Promise<string | null> {
   const secret = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET
@@ -25,6 +43,9 @@ export async function getAuthenticatedUserId(req?: NextRequest | Request): Promi
     }
     return null
   }
+
+  const fromCookies = await getTokenFromCookieStore(secret)
+  if (fromCookies) return fromCookies
 
   if (req) {
     try {
@@ -43,21 +64,5 @@ export async function getAuthenticatedUserId(req?: NextRequest | Request): Promi
     console.error("[auth] getServerSession:", e)
   }
 
-  try {
-    const cookieStore = await cookies()
-    const headerList = await headers()
-    const synthetic = {
-      headers: Object.fromEntries(headerList.entries()),
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-      },
-    }
-    const token = await getToken({ req: synthetic as unknown as NextRequest, secret })
-    return pickUserIdFromJwt(token)
-  } catch (e) {
-    console.error("[auth] getToken(cookies()):", e)
-    return null
-  }
+  return null
 }
