@@ -33,6 +33,13 @@ export async function PATCH(req: NextRequest) {
     return jsonOk(result.data)
   } catch (e) {
     console.error(e)
-    return jsonErr("PATCH error", 500)
+    const msg = e instanceof Error ? e.message : String(e)
+    if (/Unknown argument|display_time_zone|displayTimeZone|column.*does not exist/i.test(msg)) {
+      return jsonErr(
+        "Не удалось сохранить: схема БД без поля часового пояса. Выполните миграции Prisma (displayTimeZone).",
+        500,
+      )
+    }
+    return jsonErr(msg.length > 200 ? "PATCH error" : msg, 500)
   }
 }

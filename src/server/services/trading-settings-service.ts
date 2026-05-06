@@ -1,5 +1,6 @@
 import { MAX_LEVERAGE_UI } from "@/lib/trading-symbols"
 import { BINGX_VIP_MAX_TIER, feeBpsForVipTier } from "@/lib/bingx-vip"
+import { isValidIanaTimeZone } from "@/lib/iana-time-zone"
 import type { TradingDefaultsDto } from "@/contracts/trades"
 import { accountRepository } from "@/server/repositories/account-repository"
 import { riskSettingsRepository } from "@/server/repositories/risk-settings-repository"
@@ -15,6 +16,7 @@ export const tradingSettingsService = {
       maxLeverage: MAX_LEVERAGE_UI,
       activeAccountId: row.activeAccountId ?? null,
       journalAllAccounts: row.journalAllAccounts ?? false,
+      displayTimeZone: (row.displayTimeZone && String(row.displayTimeZone).trim()) || "UTC",
     }
   },
 
@@ -60,6 +62,12 @@ export const tradingSettingsService = {
       if (s === "false" || s === "0") journalAllAccounts = false
     }
 
+    const tzRaw = body.displayTimeZone
+    let displayTimeZone: string | undefined
+    if (tzRaw !== null && tzRaw !== undefined && String(tzRaw).trim() !== "") {
+      displayTimeZone = String(tzRaw).trim()
+    }
+
     if (
       defaultFeeUsdt !== undefined &&
       (!Number.isFinite(defaultFeeUsdt) || defaultFeeUsdt < 0)
@@ -90,6 +98,10 @@ export const tradingSettingsService = {
       }
     }
 
+    if (displayTimeZone !== undefined && !isValidIanaTimeZone(displayTimeZone)) {
+      return { ok: false, error: "Некорректный displayTimeZone (IANA)", status: 400 }
+    }
+
     const updateData: {
       defaultFeeUsdt?: number
       makerFeeBps?: number
@@ -97,6 +109,7 @@ export const tradingSettingsService = {
       bingxVipTier?: number
       activeAccountId?: string | null
       journalAllAccounts?: boolean
+      displayTimeZone?: string
     } = {}
 
     if (vipTier !== undefined) {
@@ -115,6 +128,9 @@ export const tradingSettingsService = {
     if (journalAllAccounts !== undefined) {
       updateData.journalAllAccounts = journalAllAccounts
     }
+    if (displayTimeZone !== undefined) {
+      updateData.displayTimeZone = displayTimeZone
+    }
 
     if (Object.keys(updateData).length === 0) {
       return { ok: false, error: "No fields to update", status: 400 }
@@ -132,6 +148,7 @@ export const tradingSettingsService = {
         maxLeverage: MAX_LEVERAGE_UI,
         activeAccountId: row.activeAccountId ?? null,
         journalAllAccounts: row.journalAllAccounts ?? false,
+        displayTimeZone: (row.displayTimeZone && String(row.displayTimeZone).trim()) || "UTC",
       },
     }
   },

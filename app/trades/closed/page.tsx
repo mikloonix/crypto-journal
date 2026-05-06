@@ -118,15 +118,19 @@ export default function ClosedTradesPage() {
   const [groupMode, setGroupMode] = useState<JournalGroupMode>("none")
   const [closedSymbols, setClosedSymbols] = useState<string[]>([])
   const [closedStrategies, setClosedStrategies] = useState<string[]>([])
+  const [view, setView] = useState<ViewMode>("trades")
 
   const listQuery = useMemo(() => {
-    const q: Record<string, string> = {
-      status: "CLOSED",
-      dateBasis: "closedAt",
-    }
+    const q: Record<string, string> = {}
     const { from, to } = periodToRange(periodPreset, customFrom, customTo)
     if (from) q.from = from
     if (to) q.to = to
+    if (view === "exits") {
+      q.dateBasis = "exitAt"
+    } else {
+      q.status = "CLOSED"
+      q.dateBasis = "closedAt"
+    }
     if (filterSymbol.trim()) q.symbol = filterSymbol.trim()
     if (filterStrategy.trim()) q.strategy = filterStrategy.trim()
     if (filterMarket) q.marketType = filterMarket
@@ -138,6 +142,7 @@ export default function ClosedTradesPage() {
     }
     return q
   }, [
+    view,
     periodPreset,
     customFrom,
     customTo,
@@ -149,7 +154,6 @@ export default function ClosedTradesPage() {
 
   const { trades, setTrades, refresh } = useTradesJournal(authed && accountReady, listQuery)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
-  const [view, setView] = useState<ViewMode>("trades")
 
   const groupedTrades = useMemo(
     () => groupClosedTradesByPeriod(trades, groupMode),
@@ -190,18 +194,24 @@ export default function ClosedTradesPage() {
 
   useEffect(() => {
     if (!authed || !accountReady) return
-    void getJournalSymbols({ status: "CLOSED" }).then((r) => {
+    void getJournalSymbols().then((r) => {
       if (r.ok) setClosedSymbols(r.data.symbols)
     })
-    void getJournalStrategyValues({ status: "CLOSED" }).then((r) => {
+    void getJournalStrategyValues().then((r) => {
       if (r.ok) setClosedStrategies(r.data.strategies)
     })
   }, [authed, accountReady])
 
   const exitRows: ExitRow[] = useMemo(() => {
+    const { from, to } = periodToRange(periodPreset, customFrom, customTo)
+    const fromMs = from ? new Date(from).getTime() : undefined
+    const toMs = to ? new Date(to).getTime() : undefined
     const rows: ExitRow[] = []
     for (const t of trades) {
       for (const x of t.exits) {
+        const ts = new Date(x.timestamp).getTime()
+        if (fromMs != null && ts < fromMs) continue
+        if (toMs != null && ts > toMs) continue
         rows.push({ exit: x, trade: t })
       }
     }
@@ -209,7 +219,7 @@ export default function ClosedTradesPage() {
       (a, b) => new Date(b.exit.timestamp).getTime() - new Date(a.exit.timestamp).getTime(),
     )
     return rows
-  }, [trades])
+  }, [trades, periodPreset, customFrom, customTo])
 
   const groupedExits = useMemo(
     () => groupClosedExitsByPeriod(exitRows, groupMode),
@@ -229,33 +239,39 @@ export default function ClosedTradesPage() {
 
   return (
     <div className="text-[var(--text-primary)]">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">Закрытые</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded border border-gray-700 p-0.5 text-sm">
+      <div className="mb-4 space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold">Закрытые</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex rounded border border-gray-700 p-0.5 text-sm">
+              <button
+                type="button"
+                onClick={() => setView("trades")}
+                className={`rounded px-3 py-1 ${view === "trades" ? "bg-gray-700 text-white" : "text-gray-400"}`}
+              >
+                Трейды
+              </button>
+              <button
+                type="button"
+                onClick={() => setView("exits")}
+                className={`rounded px-3 py-1 ${view === "exits" ? "bg-gray-700 text-white" : "text-gray-400"}`}
+              >
+                Сделки
+              </button>
+            </div>
             <button
               type="button"
-              onClick={() => setView("trades")}
-              className={`rounded px-3 py-1 ${view === "trades" ? "bg-gray-700 text-white" : "text-gray-400"}`}
+              onClick={() => void refresh()}
+              className="rounded bg-gray-800 px-3 py-1.5 text-sm hover:bg-gray-700"
             >
-              Трейды
-            </button>
-            <button
-              type="button"
-              onClick={() => setView("exits")}
-              className={`rounded px-3 py-1 ${view === "exits" ? "bg-gray-700 text-white" : "text-gray-400"}`}
-            >
-              Сделки
+              Обновить
             </button>
           </div>
-          <button
-            type="button"
-            onClick={() => void refresh()}
-            className="rounded bg-gray-800 px-3 py-1.5 text-sm hover:bg-gray-700"
-          >
-            Обновить
-          </button>
         </div>
+        <p className="text-xs text-gray-500">
+          Трейды — только полностью закрытые позиции. Сделки — каждый выход по времени (в т.ч. частичный, пока
+          позиция ещё открыта).
+        </p>
       </div>
 
       <div className="mb-4 flex flex-col gap-3 rounded-lg border border-gray-800 bg-[#0b0b0b] p-3 text-sm">

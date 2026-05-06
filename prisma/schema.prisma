@@ -121,6 +121,8 @@ model RiskSettings {
   activeAccountId String?
   /// Показывать в журнале (открытые/дашборд) все счета; новые сделки всё равно на activeAccountId.
   journalAllAccounts Boolean @default(false)
+  /// IANA timezone (этап 3): аналитика, группировки по дню/часу, календарный день на дашборде.
+  displayTimeZone    String   @default("UTC")
   updatedAt          DateTime @updatedAt
 
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)

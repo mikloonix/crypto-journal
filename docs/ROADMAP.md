@@ -6,7 +6,7 @@
 
 **Визуальный стандарт UI:** `UI-GUIDELINES.md`.
 
-**Статус этапа 2** (домен + журнал): выполнен по `02-stage-trades-domain-and-journal.md` (фильтры, группировки, карточки). **Статус этапа 2.3:** выполнен. **Статус этапа 2.5:** выполнен (app shell, счета, справочники, см. `02_5-stage-app-shell-and-settings.md`). Следующий ориентир — **2.6** или **3**.
+**Статус этапа 2** (домен + журнал): выполнен по `02-stage-trades-domain-and-journal.md` (фильтры, группировки, карточки). **Статус этапа 2.3:** выполнен. **Статус этапа 2.5:** выполнен (app shell, счета, справочники, см. `02_5-stage-app-shell-and-settings.md`). **Статус этапа 2.6 (MVP):** выполнен — см. `02_6-stage-dashboard-widgets.md`. Следующий ориентир — **3** или расширения 2.6 (котировки, прогноз).
 
 ## Этапы
 
@@ -16,8 +16,8 @@
 | 2 | `02-stage-trades-domain-and-journal.md` | домен сделок: trade + entries/exits, журнал |
 | 2.3 ✅ | `02_3-stage-architecture-and-api-consistency.md` | слои backend, envelope API, DTO, data flow, декомпозиция UI |
 | 2.5 ✅ | `02_5-stage-app-shell-and-settings.md` | app shell, справочники, выбор `Account`, `/settings/accounts` + `/settings/catalogs` |
-| 2.6 | `02_6-stage-dashboard-widgets.md` | PnL/ROI за день, цель дня, блок усреднения |
-| 3 | `03-stage-analytics-and-visuals.md` | аналитика + графики (**обязательное** соответствие скринам в `docs/`) |
+| 2.6 ✅ (MVP) | `02_6-stage-dashboard-widgets.md` | день (USDT), усреднение (ручные цены/стоп); ROI/цель/фиат — см. док |
+| 3 🔄 | `03-stage-analytics-and-visuals.md` | аналитика + графики; TZ из настроек; вкладки графиков без гистограммы «Распределение» в UI (см. док) |
 | 3.5 | `03_5-stage-portfolio-and-cashflows.md` | портфель, ввод/вывод, equity от депозитов |
 | 4 | `04-stage-risk-management.md` | риск-менеджмент, правила, подсветка |
 | 4.1 | `04_1-stage-cross-margin-risk.md` | кросс-маржа, совокупный риск, what-if ликвидации |
@@ -31,7 +31,7 @@
 
 - `/portfolio` — портфель (cashflow)
 - `/dashboard` — открытые (ввод + список OPEN)
-- `/trades/closed` — закрытые (список CLOSED + детали)
+- `/trades/closed` — трейды (полностью CLOSED) и **сделки** (выходы по `exitAt`, в т.ч. частичные)
 - `/analytics` — аналитика
 - `/forecast` — прогноз и цели (этап 4.5)
 - `/risk` — риск-менеджмент

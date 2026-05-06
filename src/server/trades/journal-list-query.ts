@@ -20,7 +20,7 @@ const querySchema = z
     marketType: z.enum(["SPOT", "FUTURE"]).optional(),
     from: z.string().max(40).optional(),
     to: z.string().max(40).optional(),
-    dateBasis: z.enum(["createdAt", "closedAt"]).optional(),
+    dateBasis: z.enum(["createdAt", "closedAt", "exitAt"]).optional(),
     accountId: z.string().min(1).max(40).optional(),
   })
   .strict()
@@ -32,7 +32,7 @@ export type JournalListFilters = {
   marketType?: MarketType
   dateFrom?: Date
   dateTo?: Date
-  dateField: "createdAt" | "closedAt"
+  dateField: "createdAt" | "closedAt" | "exitAt"
   accountId?: string
 }
 
@@ -69,8 +69,12 @@ export function parseJournalListQuery(searchParams: URLSearchParams): JournalLis
   }
 
   const o = parsed.data
-  const dateField: "createdAt" | "closedAt" =
-    o.dateBasis === "closedAt" ? "closedAt" : "createdAt"
+  const dateField: "createdAt" | "closedAt" | "exitAt" =
+    o.dateBasis === "closedAt"
+      ? "closedAt"
+      : o.dateBasis === "exitAt"
+        ? "exitAt"
+        : "createdAt"
 
   let dateFrom: Date | undefined
   let dateTo: Date | undefined

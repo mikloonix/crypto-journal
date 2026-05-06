@@ -22,6 +22,7 @@ export const riskSettingsRepository = {
       bingxVipTier?: number
       activeAccountId?: string | null
       journalAllAccounts?: boolean
+      displayTimeZone?: string
     },
   ) {
     return prisma.riskSettings.upsert({

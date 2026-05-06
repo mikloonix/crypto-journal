@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -26,6 +27,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "date-fns": "^3.3.1",
+    "date-fns-tz": "^3.2.0",
     "lucide-react": "^0.309.0",
     "next": "^16.2.4",
     "next-auth": "^4.24.5",

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react"
 import { useRouter } from "next/navigation"
-import type { AccountDto, StrategyDto } from "@/contracts/settings-catalog"
+import type { StrategyDto } from "@/contracts/settings-catalog"
 import { settingsListsStore } from "@/features/settings/settings-lists-store"
 import {
   deleteAccount,

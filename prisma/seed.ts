@@ -9,22 +9,17 @@ async function main() {
 
   const user = await prisma.user.upsert({
     where: { email: 'admin@crypto-journal.com' },
-    update: {},
+    update: {
+      password: hashedPassword,
+      name: 'Trader',
+    },
     create: {
       email: 'admin@crypto-journal.com',
       password: hashedPassword,
       name: 'Trader',
       riskSettings: {
         create: {
-          accountBalance: 10000,
-          riskPerTrade: 1.0,
-          maxDrawdown: 20.0,
-          riskPerDay: 3.0,
-          maxOpenRisk: 5.0,
-          defaultFeeUsdt: 0,
-          makerFeeBps: 2,
-          takerFeeBps: 5,
-          bingxVipTier: 0,
+          ...riskSettingsCreateDefaults,
         },
       },
     },

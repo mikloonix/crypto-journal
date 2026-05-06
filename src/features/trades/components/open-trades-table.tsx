@@ -80,7 +80,13 @@ export function OpenTradesTable({
                 <tr className="border-b border-gray-900">
                   <td className="py-2 pr-2">{t.symbol}</td>
                   <td className="py-2 pr-2">{t.marketType}</td>
-                  <td className="py-2 pr-2">{t.direction}</td>
+                  <td
+                    className={`py-2 pr-2 ${
+                      t.direction === "LONG" ? "text-green-400" : t.direction === "SHORT" ? "text-red-400" : ""
+                    }`}
+                  >
+                    {t.direction}
+                  </td>
                   <td className="py-2 pr-2">
                     {j.entryVolume ? formatInQuote(j.entryVolume, q) : "—"}
                   </td>

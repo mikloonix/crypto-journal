@@ -8,6 +8,10 @@ import { getEmotions, getStrategies } from "@/features/settings/api"
 import { getTradingDefaults, postCloseTrade, postDeleteTrade, postOpenTrade } from "@/features/trades/api"
 import { useActiveAccount } from "@/features/trades/active-account-context"
 import { OpenTradesTable } from "@/features/trades/components/open-trades-table"
+import {
+  DashboardAveragingPanelStage26,
+  DashboardDayStripStage26,
+} from "@/features/trades/components/dashboard-widgets-stage26"
 import { DashboardSummaryCards } from "@/features/trades/components/dashboard-summary-cards"
 import { TradeOpenForm, type Liquidity } from "@/features/trades/components/trade-open-form"
 import { useProtectedPageSession } from "@/features/trades/hooks/use-protected-page-session"
@@ -31,6 +35,8 @@ export default function DashboardPage() {
     resolvedActiveAccountId,
     activeAccountId,
   } = useActiveAccount()
+
+  const [dashWidgetsNonce, setDashWidgetsNonce] = useState(0)
 
   const tradeAccountId = activeAccountId ?? resolvedActiveAccountId
 
@@ -60,6 +66,7 @@ export default function DashboardPage() {
     takerFeeBps: 5,
     maxLeverage: MAX_LEVERAGE_UI,
   })
+  const [displayTimeZone, setDisplayTimeZone] = useState<string | null>(null)
   const [strategyNames, setStrategyNames] = useState<string[]>([])
   const [emotionNames, setEmotionNames] = useState<string[]>([])
   const [entryLiquidity, setEntryLiquidity] = useState<Liquidity>("TAKER")
@@ -82,6 +89,7 @@ export default function DashboardPage() {
         takerFeeBps: Number(d.takerFeeBps) || 5,
         maxLeverage: Number(d.maxLeverage) || MAX_LEVERAGE_UI,
       })
+      setDisplayTimeZone((d.displayTimeZone && String(d.displayTimeZone).trim()) || "UTC")
     })
   }, [authed])
 
@@ -173,6 +181,7 @@ export default function DashboardPage() {
       return copy
     })
     await refresh()
+    setDashWidgetsNonce((n) => n + 1)
     setPrice("")
   }
 
@@ -209,7 +218,7 @@ export default function DashboardPage() {
     }
     const updated = res.data.trade
     setTrades((prev) => prev.map((t) => (t.id === id ? updated : t)))
-    void refresh()
+    void refresh().then(() => setDashWidgetsNonce((n) => n + 1))
     setExitPriceById((prev) => ({ ...prev, [id]: "" }))
     setExitVolumeById((prev) => ({ ...prev, [id]: "" }))
     setEmotionExitById((prev) => ({ ...prev, [id]: "" }))
@@ -242,7 +251,7 @@ export default function DashboardPage() {
       return
     }
     setTrades((prev) => prev.filter((t) => t.id !== id))
-    void refresh()
+    void refresh().then(() => setDashWidgetsNonce((n) => n + 1))
   }
 
   return (
@@ -282,7 +291,14 @@ export default function DashboardPage() {
         openCount={openCount}
       />
 
-      <EquityChart equityCurve={summary?.equityCurve ?? []} />
+      <DashboardDayStripStage26
+        authed={authed}
+        accountReady={accountReady}
+        journalAllAccounts={journalAllAccounts}
+        journalAccountId={resolvedActiveAccountId ?? undefined}
+        displayTimeZone={displayTimeZone}
+        refreshNonce={dashWidgetsNonce}
+      />
 
       <OpenTradesTable
         openTrades={openTrades}
@@ -304,6 +320,16 @@ export default function DashboardPage() {
         deleteTrade={deleteTrade}
         setExitVolumeFraction={setExitVolumeFraction}
         emotionExitOptions={emotionNames}
+      />
+
+      <EquityChart equityCurve={summary?.equityCurve ?? []} />
+
+      <DashboardAveragingPanelStage26
+        authed={authed}
+        accountReady={accountReady}
+        journalAllAccounts={journalAllAccounts}
+        journalAccountId={resolvedActiveAccountId ?? undefined}
+        refreshNonce={dashWidgetsNonce}
       />
     </div>
   )

@@ -102,6 +102,8 @@ export type TradingDefaultsDto = {
   activeAccountId: string | null
   /** Журнал по всем счетам (шапка «Все счета») */
   journalAllAccounts: boolean
+  /** IANA timezone для аналитики и календарного дня (этап 3) */
+  displayTimeZone: string
 }
 
 /** Корзина: у удалённого выхода `trade` без этого выхода в `exits` — для legJournal собирается на сервере. */

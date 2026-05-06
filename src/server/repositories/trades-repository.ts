@@ -10,6 +10,15 @@ import { tradeIncludeActive, whereActiveTrades } from "@/lib/trade-scope"
 import { isFullyClosed, sumExitVolume } from "@/lib/trade-volumes"
 import type { JournalListFilters } from "@/server/trades/journal-list-query"
 
+function journalScopeWhere(
+  journalAllAccounts: boolean,
+  journalAccountId: string | undefined,
+): Prisma.TradeWhereInput {
+  if (journalAllAccounts) return {}
+  if (journalAccountId) return { accountId: journalAccountId }
+  return {}
+}
+
 function buildJournalListWhere(userId: string, filters: JournalListFilters): Prisma.TradeWhereInput {
   const w: Prisma.TradeWhereInput = { ...whereActiveTrades(userId) }
   if (filters.status) w.status = filters.status
@@ -21,7 +30,15 @@ function buildJournalListWhere(userId: string, filters: JournalListFilters): Pri
   }
   if (filters.marketType) w.marketType = filters.marketType
 
-  if (filters.dateFrom || filters.dateTo) {
+  if (filters.dateField === "exitAt") {
+    const some: Prisma.ExitWhereInput = { deletedAt: null }
+    if (filters.dateFrom || filters.dateTo) {
+      some.timestamp = {}
+      if (filters.dateFrom) some.timestamp.gte = filters.dateFrom
+      if (filters.dateTo) some.timestamp.lte = filters.dateTo
+    }
+    w.exits = { some }
+  } else if (filters.dateFrom || filters.dateTo) {
     if (filters.dateField === "closedAt") {
       const range: Prisma.DateTimeNullableFilter = {}
       if (filters.dateFrom) range.gte = filters.dateFrom
@@ -79,6 +96,113 @@ export const tradesRepository = {
   findManyActiveWithLegsFiltered(userId: string, filters: JournalListFilters) {
     return prisma.trade.findMany({
       where: buildJournalListWhere(userId, filters),
+      orderBy: { createdAt: "desc" },
+      include: tradeIncludeActive,
+    })
+  },
+
+  /** [closedAt start, closedAt end) — локальный день в UTC-инстантах с клиента. */
+  findClosedTradesClosedAtHalfOpenRange(
+    userId: string,
+    startUtc: Date,
+    endExclusiveUtc: Date,
+    accountId?: string,
+  ) {
+    return prisma.trade.findMany({
+      where: {
+        ...whereActiveTrades(userId),
+        status: TradeStatus.CLOSED,
+        closedAt: { gte: startUtc, lt: endExclusiveUtc },
+        ...(accountId ? { accountId } : {}),
+      },
+      orderBy: { closedAt: "desc" },
+      include: tradeIncludeActive,
+    })
+  },
+
+  /** Выходы (ноги) с временем в [start, endExclusive); для дневной сводки и PnL по сделкам-выходам. */
+  findExitsInTimestampHalfOpenRange(
+    userId: string,
+    startUtc: Date,
+    endExclusiveUtc: Date,
+    accountId?: string,
+  ) {
+    return prisma.exit.findMany({
+      where: {
+        deletedAt: null,
+        timestamp: { gte: startUtc, lt: endExclusiveUtc },
+        trade: {
+          ...whereActiveTrades(userId),
+          ...(accountId ? { accountId } : {}),
+        },
+      },
+      include: {
+        trade: { include: tradeIncludeActive },
+      },
+      orderBy: { timestamp: "desc" },
+    })
+  },
+
+  /** Закрытые до начала периода — для капитала на T_start (без фильтров символа/стратегии). */
+  findClosedTradesClosedBefore(
+    userId: string,
+    periodStartUtc: Date,
+    journalAllAccounts: boolean,
+    journalAccountId: string | undefined,
+  ) {
+    const scope = journalScopeWhere(journalAllAccounts, journalAccountId)
+    return prisma.trade.findMany({
+      where: {
+        ...whereActiveTrades(userId),
+        ...scope,
+        status: TradeStatus.CLOSED,
+        /** `lt` в SQL не матчит NULL — отдельный `not: null` с `lt` в одном объекте ломает Prisma. */
+        closedAt: { lt: periodStartUtc },
+      },
+      orderBy: { closedAt: "asc" },
+      include: tradeIncludeActive,
+    })
+  },
+
+  /** Закрытые в [start, endExclusive) с фильтрами аналитики и скоупом журнала. */
+  findClosedTradesAnalyticsPeriod(
+    userId: string,
+    startUtc: Date,
+    endExclusiveUtc: Date,
+    journalAllAccounts: boolean,
+    journalAccountId: string | undefined,
+    filters: { symbol?: string; strategy?: string; marketType?: MarketType },
+  ) {
+    const scope = journalScopeWhere(journalAllAccounts, journalAccountId)
+    const w: Prisma.TradeWhereInput = {
+      ...whereActiveTrades(userId),
+      ...scope,
+      status: TradeStatus.CLOSED,
+      closedAt: { gte: startUtc, lt: endExclusiveUtc },
+    }
+    if (filters.symbol?.trim()) {
+      w.symbol = { contains: filters.symbol.trim(), mode: "insensitive" }
+    }
+    if (filters.strategy?.trim()) {
+      w.strategy = { contains: filters.strategy.trim(), mode: "insensitive" }
+    }
+    if (filters.marketType) {
+      w.marketType = filters.marketType
+    }
+    return prisma.trade.findMany({
+      where: w,
+      orderBy: { closedAt: "asc" },
+      include: tradeIncludeActive,
+    })
+  },
+
+  findOpenTradesWithLegs(userId: string, accountId?: string) {
+    return prisma.trade.findMany({
+      where: {
+        ...whereActiveTrades(userId),
+        status: TradeStatus.OPEN,
+        ...(accountId ? { accountId } : {}),
+      },
       orderBy: { createdAt: "desc" },
       include: tradeIncludeActive,
     })
