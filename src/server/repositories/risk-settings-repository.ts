@@ -36,6 +36,27 @@ export const riskSettingsRepository = {
     })
   },
 
+  patchRiskLimits(
+    userId: string,
+    update: {
+      accountBalance?: number
+      riskPerTrade?: number
+      riskPerDay?: number
+      maxDrawdown?: number
+      maxOpenRisk?: number
+    },
+  ) {
+    return prisma.riskSettings.upsert({
+      where: { userId },
+      update,
+      create: {
+        userId,
+        ...riskSettingsCreateDefaults,
+        ...update,
+      },
+    })
+  },
+
   setActiveAccountId(userId: string, activeAccountId: string | null) {
     return prisma.riskSettings.upsert({
       where: { userId },

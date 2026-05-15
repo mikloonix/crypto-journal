@@ -1,12 +1,29 @@
 import type { Entry, Exit, Trade } from "@prisma/client"
+import {
+  contractQtyFromMargin,
+  sumEntryMarginUsdt,
+  sumExitMarginUsdt,
+  tradeLeverageFromEntries,
+  weightedAvgEntryPrice,
+} from "@/server/trading/position-margin"
 
-/** Единый расчёт PnL по сделке (fee/funding на уровне Trade). */
+/** Единый расчёт PnL по сделке (fee/funding на уровне Trade). volume = маржа USDT. */
 export function calculateTradePnL(trade: Trade & { entries: Entry[]; exits: Exit[] }): number {
-  const totalEntryValue = trade.entries.reduce((sum, e) => sum + e.price * e.volume, 0)
-  const totalExitValue = trade.exits.reduce((sum, e) => sum + e.price * e.volume, 0)
+  const lev = tradeLeverageFromEntries(trade.entries)
 
-  let pnl = totalExitValue - totalEntryValue
+  let entryValue = 0
+  for (const e of trade.entries) {
+    const q = contractQtyFromMargin(e.volume, e.price, e.leverage)
+    entryValue += q * e.price
+  }
 
+  let exitValue = 0
+  for (const x of trade.exits) {
+    const q = contractQtyFromMargin(x.volume, x.price, lev)
+    exitValue += q * x.price
+  }
+
+  let pnl = exitValue - entryValue
   if (trade.direction === "SHORT") {
     pnl = -pnl
   }
@@ -18,8 +35,8 @@ export function calculateTradePnL(trade: Trade & { entries: Entry[]; exits: Exit
 }
 
 export function calculateVolumes(trade: { entries: Entry[]; exits: Exit[] }) {
-  const entryVolume = trade.entries.reduce((s, e) => s + e.volume, 0)
-  const exitVolume = trade.exits.reduce((s, e) => s + e.volume, 0)
+  const entryVolume = sumEntryMarginUsdt(trade.entries)
+  const exitVolume = sumExitMarginUsdt(trade.exits)
   const remainingVolume = entryVolume - exitVolume
   return { entryVolume, exitVolume, remainingVolume }
 }
@@ -31,13 +48,21 @@ export function calculateRealizedPnL(
   const { entryVolume, exitVolume } = calculateVolumes(trade)
   if (exitVolume <= 0 || entryVolume <= 0) return 0
 
-  const entryValue = trade.entries.reduce((sum, e) => sum + e.price * e.volume, 0)
-  const exitValue = trade.exits.reduce((sum, e) => sum + e.price * e.volume, 0)
+  const lev = tradeLeverageFromEntries(trade.entries)
+  const avgEntry = weightedAvgEntryPrice(trade.entries)
+  if (avgEntry <= 0) return 0
 
-  const avgEntry = entryValue / entryVolume
-  const avgExit = exitValue / exitVolume
+  let exitQty = 0
+  let exitValue = 0
+  for (const x of trade.exits) {
+    const q = contractQtyFromMargin(x.volume, x.price, lev)
+    exitQty += q
+    exitValue += q * x.price
+  }
+  if (exitQty <= 0) return 0
+  const avgExit = exitValue / exitQty
 
-  let pnl = (avgExit - avgEntry) * exitVolume
+  let pnl = (avgExit - avgEntry) * exitQty
   if (trade.direction === "SHORT") pnl = -pnl
 
   const ratio = Math.min(1, exitVolume / entryVolume)

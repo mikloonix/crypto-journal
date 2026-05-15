@@ -13,9 +13,13 @@
 2. Примените схему и сиды:
 
 ```bash
+npx prisma migrate deploy   # прод / уже существующая БД
+# или для локальной разработки с нуля:
 npx prisma migrate dev
 npm run db:seed
 ```
+
+Если БД уже создана через `db push` и `migrate deploy` выдаёт **P3005**, один раз выполните baseline — см. `docs/04-stage-risk-management.md` (раздел Prisma).
 
 Учётная запись после сида: `admin@crypto-journal.com` / `trader123` (смените пароль в проде).
 

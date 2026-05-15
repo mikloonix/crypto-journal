@@ -1,8 +1,9 @@
 "use client"
 
-import { Fragment, type Dispatch, type SetStateAction } from "react"
+import { Fragment, useState, type Dispatch, type SetStateAction } from "react"
 import type { TradeListItemDto } from "@/contracts/trades"
-import { formatDecimal, formatInQuote } from "@/lib/format-amount"
+import { RiskBadge } from "@/features/risk/components/risk-badge"
+import { formatDecimal, formatInQuote, formatPercent } from "@/lib/format-amount"
 import { quoteCurrencyFromSymbol } from "@/lib/quote-currency"
 
 type Liquidity = "MAKER" | "TAKER"
@@ -26,6 +27,7 @@ type Props = {
   closeTrade: (_id: string) => void
   deleteTrade: (_id: string) => void
   setExitVolumeFraction: (_tradeId: string, _remaining: number, _fraction: number) => void
+  onSaveStopLoss?: (_tradeId: string, _stopLossPrice: string) => void | Promise<void>
   /** Справочник эмоций (выход) */
   emotionExitOptions?: string[]
 }
@@ -49,8 +51,11 @@ export function OpenTradesTable({
   closeTrade,
   deleteTrade,
   setExitVolumeFraction,
+  onSaveStopLoss,
   emotionExitOptions = [],
 }: Props) {
+  const [stopDraft, setStopDraft] = useState<Record<string, string>>({})
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -65,6 +70,8 @@ export function OpenTradesTable({
             <th className="py-2 pr-2">Вход (ср.)</th>
             <th className="py-2 pr-2">Выход (ср.)</th>
             <th className="py-2 pr-2">PnL (реал.)</th>
+            <th className="py-2 pr-2">Риск</th>
+            <th className="py-2 pr-2">Стоп</th>
             <th className="py-2">Действия</th>
           </tr>
         </thead>
@@ -106,6 +113,44 @@ export function OpenTradesTable({
                     }
                   >
                     {showPnl ? formatInQuote(displayPnl!, q) : "—"}
+                  </td>
+                  <td className="py-2 pr-2">
+                    <RiskBadge risk={t.risk} />
+                    {t.risk.riskPct != null ? (
+                      <span className="ml-1 text-xs text-gray-500 tabular-nums">
+                        {formatPercent(t.risk.riskPct)}%
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className="py-2 pr-2">
+                    <div className="flex gap-1">
+                      <input
+                        value={
+                          stopDraft[t.id] ??
+                          (t.stopLossPrice != null ? String(t.stopLossPrice) : "")
+                        }
+                        onChange={(e) =>
+                          setStopDraft((p) => ({ ...p, [t.id]: e.target.value }))
+                        }
+                        placeholder="стоп"
+                        className="w-20 rounded border border-gray-700 bg-gray-800 px-1 py-0.5 text-xs"
+                      />
+                      {onSaveStopLoss ? (
+                        <button
+                          type="button"
+                          className="rounded bg-gray-700 px-1.5 py-0.5 text-[10px] hover:bg-gray-600"
+                          onClick={() =>
+                            void onSaveStopLoss(
+                              t.id,
+                              stopDraft[t.id] ??
+                                (t.stopLossPrice != null ? String(t.stopLossPrice) : ""),
+                            )
+                          }
+                        >
+                          OK
+                        </button>
+                      ) : null}
+                    </div>
                   </td>
                   <td className="py-2">
                     <div className="flex flex-wrap gap-2">
@@ -239,7 +284,7 @@ export function OpenTradesTable({
                 </tr>
                 {expanded[t.id] && (
                   <tr className="border-b border-gray-900 bg-[#0b0b0b]">
-                    <td colSpan={10} className="py-3">
+                    <td colSpan={12} className="py-3">
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <div>
                           <div className="text-gray-400 text-xs mb-2">Входы</div>

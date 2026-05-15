@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type {
   AveragingComputeResultDto,
   AveragingContextDto,
@@ -161,6 +161,8 @@ type AveragingProps = {
   journalAllAccounts: boolean
   journalAccountId: string | undefined
   refreshNonce?: number
+  /** Debounced «цена сейчас» → пересчёт риска на дашборде */
+  onMarkPricesChange?: (markPricesByTradeId: Record<string, number>) => void
 }
 
 export function DashboardAveragingPanelStage26({
@@ -169,6 +171,7 @@ export function DashboardAveragingPanelStage26({
   journalAllAccounts,
   journalAccountId,
   refreshNonce = 0,
+  onMarkPricesChange,
 }: AveragingProps) {
   const router = useRouter()
   const [ctx, setCtx] = useState<AveragingContextDto | null>(null)
@@ -177,6 +180,7 @@ export function DashboardAveragingPanelStage26({
     Record<string, { priceNow: string; price1hAgo: string; stopPrice: string }>
   >({})
   const [err, setErr] = useState<string | null>(null)
+  const prevMarksRef = useRef<Record<string, number>>({})
 
   const loadCtx = useCallback(async () => {
     if (!authed || !accountReady) return
@@ -191,6 +195,7 @@ export function DashboardAveragingPanelStage26({
       return
     }
     setCtx(r.data)
+    prevMarksRef.current = {}
     setInputs((prev) => {
       const next = { ...prev }
       for (const p of r.data.positions) {
@@ -203,6 +208,24 @@ export function DashboardAveragingPanelStage26({
   useEffect(() => {
     void loadCtx()
   }, [loadCtx, refreshNonce])
+
+  useEffect(() => {
+    if (!onMarkPricesChange || !ctx) return
+    const marks: Record<string, number> = {}
+    for (const p of ctx.positions) {
+      const raw = inputs[p.tradeId]?.priceNow ?? ""
+      if (raw === "") continue
+      const n = Number(raw)
+      if (Number.isFinite(n) && n > 0) marks[p.tradeId] = n
+    }
+    const timer = window.setTimeout(() => {
+      const had = Object.keys(prevMarksRef.current).length > 0
+      const has = Object.keys(marks).length > 0
+      if (has || had) onMarkPricesChange(marks)
+      prevMarksRef.current = marks
+    }, 400)
+    return () => window.clearTimeout(timer)
+  }, [inputs, ctx, onMarkPricesChange])
 
   async function recompute() {
     if (!ctx) return
@@ -247,8 +270,8 @@ export function DashboardAveragingPanelStage26({
         </button>
       </div>
       <p className="mb-3 text-xs text-[var(--text-secondary)]">
-        Источник цены: <strong>вручную</strong> (котировки биржи — позже). Цены и стоп не сохраняются.
-        Расчёт информационный, не инвестиционная рекомендация.
+        Источник цены: <strong>вручную</strong> (котировки биржи — позже). «Цена сейчас» обновляет
+        карточки риска и таблицу открытых сделок (с задержкой ~0,4 с). Цены не сохраняются.
       </p>
       {err ? <p className="mb-2 text-sm text-[var(--accent-red)]">{err}</p> : null}
 

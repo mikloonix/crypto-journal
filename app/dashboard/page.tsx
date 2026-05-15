@@ -1,10 +1,12 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import EquityChart from "@/components/EquityChart"
 import { MAX_LEVERAGE_UI } from "@/lib/trading-symbols"
 import { getEmotions, getStrategies } from "@/features/settings/api"
+import type { JournalRiskSummaryDto } from "@/contracts/risk"
+import { patchTradeStopLoss, postRiskEvaluate } from "@/features/risk/api"
 import { getTradingDefaults, postCloseTrade, postDeleteTrade, postOpenTrade } from "@/features/trades/api"
 import { useActiveAccount } from "@/features/trades/active-account-context"
 import { OpenTradesTable } from "@/features/trades/components/open-trades-table"
@@ -51,6 +53,46 @@ export default function DashboardPage() {
     listQuery,
   )
 
+  const [liveRisk, setLiveRisk] = useState<JournalRiskSummaryDto | null>(null)
+  const riskEvalSeq = useRef(0)
+
+  useEffect(() => {
+    setLiveRisk(summary?.risk ?? null)
+  }, [summary])
+
+  const applyMarkPricesForRisk = useCallback(
+    async (markPricesByTradeId: Record<string, number>) => {
+      if (!authed || !accountReady) return
+      const seq = ++riskEvalSeq.current
+      const r = await postRiskEvaluate({
+        ...(Object.keys(markPricesByTradeId).length > 0 ? { markPricesByTradeId } : {}),
+        ...(journalAllAccounts || !resolvedActiveAccountId
+          ? {}
+          : { accountId: resolvedActiveAccountId }),
+      })
+      if (seq !== riskEvalSeq.current) return
+      if (!r.ok) {
+        redirectOn401(router, r.status)
+        return
+      }
+      setLiveRisk(r.data.summary)
+      setTrades((prev) =>
+        prev.map((t) => {
+          const row = r.data.openTrades.find((x) => x.tradeId === t.id)
+          return row ? { ...t, risk: row.risk } : t
+        }),
+      )
+    },
+    [
+      authed,
+      accountReady,
+      journalAllAccounts,
+      resolvedActiveAccountId,
+      router,
+      setTrades,
+    ],
+  )
+
   const [symbol, setSymbol] = useState("BTCUSDT")
   const [direction, setDirection] = useState<"LONG" | "SHORT">("LONG")
   const [price, setPrice] = useState("")
@@ -77,6 +119,7 @@ export default function DashboardPage() {
   const [feeById, setFeeById] = useState<Record<string, string>>({})
   const [fundingById, setFundingById] = useState<Record<string, string>>({})
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  const [stopLoss, setStopLoss] = useState("")
 
   useEffect(() => {
     if (!authed) return
@@ -159,6 +202,8 @@ export default function DashboardPage() {
     }
     if (fee !== "") openBody.fee = Number(fee)
     if (funding !== "") openBody.funding = Number(funding)
+    const sl = Number(stopLoss)
+    if (Number.isFinite(sl) && sl > 0) openBody.stopLossPrice = sl
 
     const res = await postOpenTrade(openBody)
     if (!res.ok) {
@@ -241,6 +286,26 @@ export default function DashboardPage() {
     setExitVolumeById((prev) => ({ ...prev, [tradeId]: String(rounded) }))
   }
 
+  async function saveStopLoss(tradeId: string, raw: string) {
+    const trimmed = raw.trim()
+    const stopLossPrice =
+      trimmed === "" ? null : Number.isFinite(Number(trimmed)) && Number(trimmed) > 0
+        ? Number(trimmed)
+        : null
+    if (trimmed !== "" && stopLossPrice == null) {
+      alert("Стоп должен быть числом > 0")
+      return
+    }
+    const r = await patchTradeStopLoss(tradeId, stopLossPrice)
+    if (!r.ok) {
+      redirectOn401(router, r.status)
+      if (r.status !== 401) alert(r.error || "Ошибка")
+      return
+    }
+    setTrades((prev) => prev.map((t) => (t.id === tradeId ? r.data.trade : t)))
+    void refresh()
+  }
+
   async function deleteTrade(id: string) {
     if (!confirm("Удалить трейд в корзину? Восстановление — Настройки → Корзина.")) return
 
@@ -280,6 +345,8 @@ export default function DashboardPage() {
         tradingDefaults={tradingDefaults}
         strategyOptions={strategyNames}
         emotionOptions={emotionNames}
+        stopLoss={stopLoss}
+        setStopLoss={setStopLoss}
         formInstanceId="dashboard"
         onSubmit={addTrade}
       />
@@ -289,6 +356,7 @@ export default function DashboardPage() {
         totalPnL={totalPnL}
         roi={roi}
         openCount={openCount}
+        risk={liveRisk}
       />
 
       <DashboardDayStripStage26
@@ -320,6 +388,7 @@ export default function DashboardPage() {
         deleteTrade={deleteTrade}
         setExitVolumeFraction={setExitVolumeFraction}
         emotionExitOptions={emotionNames}
+        onSaveStopLoss={saveStopLoss}
       />
 
       <EquityChart equityCurve={summary?.equityCurve ?? []} />
@@ -330,6 +399,7 @@ export default function DashboardPage() {
         journalAllAccounts={journalAllAccounts}
         journalAccountId={resolvedActiveAccountId ?? undefined}
         refreshNonce={dashWidgetsNonce}
+        onMarkPricesChange={applyMarkPricesForRisk}
       />
     </div>
   )

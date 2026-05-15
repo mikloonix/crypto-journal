@@ -1,25 +1,26 @@
 import type { Direction, Entry, Exit } from "@prisma/client"
+import {
+  contractQtyFromMargin,
+  tradeLeverageFromEntries,
+  weightedAvgEntryPrice,
+} from "@/server/trading/position-margin"
 
-function weightedAvgEntry(entries: Pick<Entry, "price" | "volume">[]): number {
-  const vol = entries.reduce((s, e) => s + e.volume, 0)
-  if (vol <= 0) return 0
-  return entries.reduce((s, e) => s + e.price * e.volume, 0) / vol
-}
-
-/** Упрощённый PnL и ROI по одному выходу: к средневзвешенному входу всего трейда, минус fee/funding этого выхода. */
+/** PnL и ROI по одному выходу (volume = маржа USDT). */
 export function pnlRoiForExitLeg(
   direction: Direction,
-  entries: Pick<Entry, "price" | "volume">[],
+  entries: Pick<Entry, "price" | "volume" | "leverage">[],
   exit: Pick<Exit, "price" | "volume" | "fee" | "funding">,
 ): { pnl: number; roiPct: number } {
-  const avgEntry = weightedAvgEntry(entries)
-  if (avgEntry <= 0 || exit.volume <= 0) return { pnl: 0, roiPct: 0 }
+  const avgEntry = weightedAvgEntryPrice(entries)
+  const lev = tradeLeverageFromEntries(entries)
+  const exitQty = contractQtyFromMargin(exit.volume, exit.price, lev)
+  if (avgEntry <= 0 || exitQty <= 0) return { pnl: 0, roiPct: 0 }
 
-  let gross = (exit.price - avgEntry) * exit.volume
+  let gross = (exit.price - avgEntry) * exitQty
   if (direction === "SHORT") gross = -gross
 
   const pnl = gross - (exit.fee ?? 0) - (exit.funding ?? 0)
-  const notional = exit.price * exit.volume
+  const notional = exit.volume * lev
   const roiPct = notional > 0 ? (pnl / notional) * 100 : 0
   return { pnl, roiPct }
 }

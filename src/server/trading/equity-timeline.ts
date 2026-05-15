@@ -8,6 +8,7 @@ import {
   type JournalEquityScope,
 } from "@/server/trading/cashflow-usdt"
 import { JOURNAL_INITIAL_DEPOSIT_USDT } from "@/server/trading/equity-constants"
+import { emptyJournalRiskSummary } from "@/server/trading/attach-journal-risk"
 
 export type TradeWithLegsForEquity = Trade & { entries: Entry[]; exits: Exit[] }
 
@@ -126,6 +127,7 @@ export function buildJournalEquitySummary(
     roiPercent,
     openCount: opts.openCount,
     equityCurve,
+    risk: emptyJournalRiskSummary,
   }
 }
 

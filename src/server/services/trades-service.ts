@@ -19,8 +19,12 @@ import {
   type TradeWithJournal,
 } from "@/server/trading/journal-metrics"
 import { buildJournalEquitySummary } from "@/server/trading/equity-timeline"
+import { buildJournalRiskPack } from "@/server/trading/attach-journal-risk"
+import { tradeLeverageFromEntries } from "@/server/trading/position-margin"
 import { serializeTradeListItem } from "@/server/trading/serialize-trade"
 import type { JournalListQueryForService } from "@/server/trades/journal-list-query"
+import { tradePatchBodySchema } from "@/server/validation/trade-patch"
+import { zodErrorMessage } from "@/server/validation/zod-helpers"
 
 function toTradeWithLegs(row: {
   entries: TradeWithLegs["entries"]
@@ -52,21 +56,29 @@ async function packJournalList(rows: TradeWithLegs[], userId: string): Promise<T
     journalAccountId,
   )
   const equityTrades = equityTradesRaw.map((t) => toTradeWithLegs(t))
-  const summary = buildJournalEquitySummary(equityTrades, cashflows, {
-    journalAllAccounts,
-    journalAccountId,
-  }, {
+  const scope = { journalAllAccounts, journalAccountId }
+  const summaryBase = buildJournalEquitySummary(equityTrades, cashflows, scope, {
     openCount: rows.filter((t) => t.status === TradeStatus.OPEN).length,
   })
-  const withJ = attachJournalToTradesList(rows)
+  const { perTrade, summary: riskSummary } = await buildJournalRiskPack(
+    userId,
+    rows,
+    summaryBase,
+    scope,
+  )
+  const summary = { ...summaryBase, risk: riskSummary }
+  const withJ = attachJournalToTradesList(rows, perTrade)
   return {
     trades: withJ.map(serializeTradeListItem),
     summary,
   }
 }
 
-function packSingle(row: TradeWithLegs): TradeWithJournal {
-  return attachJournalToTradesList([row])[0]!
+async function packSingle(userId: string, row: TradeWithLegs): Promise<TradeWithJournal> {
+  const list = await packJournalList([row], userId)
+  const risk = list.trades[0]?.risk
+  const withJ = attachJournalToTradesList([row], risk ? new Map([[row.id, risk]]) : undefined)
+  return withJ[0]!
 }
 
 async function resolveAccountIdForOpen(
@@ -151,7 +163,9 @@ export const tradesService = {
     const makerBps = Number(settings.makerFeeBps) || BINGX_DEFAULT_MAKER_FEE_BPS
     const takerBps = Number(settings.takerFeeBps) || BINGX_DEFAULT_TAKER_FEE_BPS
     const liquidityRole = parseLiquidityRole(body.liquidityRole)
-    const notion = notionalUsdt(price, volume)
+    const levRaw = body.leverage != null ? Number(body.leverage) : NaN
+    const entryLev = Number.isFinite(levRaw) && levRaw > 0 ? Math.round(levRaw) : 1
+    const notion = notionalUsdt(volume, entryLev)
 
     let entryFee = 0
     if (body.fee != null && body.fee !== "") {
@@ -174,20 +188,25 @@ export const tradesService = {
       marketType,
     )
 
-    const levRaw = body.leverage != null ? Number(body.leverage) : NaN
     const entryCreate = {
       price,
       volume,
       fee: entryFee,
       liquidityRole,
-      ...(Number.isFinite(levRaw) && levRaw > 0 ? { leverage: Math.round(levRaw) } : {}),
+      ...(entryLev > 1 ? { leverage: entryLev } : {}),
     }
 
     const strategy = body.strategy ? String(body.strategy) : undefined
     const emotionEntry = body.emotionEntry ? String(body.emotionEntry) : undefined
     const notes = body.notes ? String(body.notes) : undefined
 
-    const trade = existing
+    let stopLossPrice: number | null = null
+    if (body.stopLossPrice != null && body.stopLossPrice !== "") {
+      const sl = Number(body.stopLossPrice)
+      if (Number.isFinite(sl) && sl > 0) stopLossPrice = sl
+    }
+
+    let trade = existing
       ? await tradesRepository.updateTradeAddEntry({
           tradeId: existing.id,
           strategy,
@@ -207,11 +226,18 @@ export const tradesService = {
           notes,
           entryFee,
           openingFunding,
+          stopLossPrice,
           entryCreate,
         })
 
+    if (existing && stopLossPrice != null) {
+      await tradesRepository.patchTradeFields(userId, existing.id, { stopLossPrice })
+      const refreshed = await tradesRepository.findFirstActiveWithLegs(userId, existing.id)
+      if (refreshed) trade = refreshed
+    }
+
     const row = toTradeWithLegs(trade)
-    return { ok: true, trade: serializeTradeListItem(packSingle(row)) }
+    return { ok: true, trade: serializeTradeListItem(await packSingle(userId, row)) }
   },
 
   async closeTrade(
@@ -260,7 +286,8 @@ export const tradesService = {
     const makerBps = Number(settings.makerFeeBps) || BINGX_DEFAULT_MAKER_FEE_BPS
     const takerBps = Number(settings.takerFeeBps) || BINGX_DEFAULT_TAKER_FEE_BPS
 
-    const notion = notionalUsdt(exitPrice, exitVolume)
+    const exitLev = tradeLeverageFromEntries(trade.entries)
+    const notion = notionalUsdt(exitVolume, exitLev)
     let exitFee = 0
     if (body.fee != null && body.fee !== "") {
       const n = Number(body.fee)
@@ -295,7 +322,43 @@ export const tradesService = {
     }
 
     const row = toTradeWithLegs(updated)
-    return { ok: true, trade: serializeTradeListItem(packSingle(row)) }
+    return { ok: true, trade: serializeTradeListItem(await packSingle(userId, row)) }
+  },
+
+  async patchTrade(
+    userId: string,
+    tradeId: string,
+    body: unknown,
+  ): Promise<
+    | { ok: true; trade: ReturnType<typeof serializeTradeListItem> }
+    | { ok: false; error: string; status: number }
+  > {
+    const parsed = tradePatchBodySchema.safeParse(body)
+    if (!parsed.success) {
+      return { ok: false, error: zodErrorMessage(parsed.error), status: 400 }
+    }
+    if (Object.keys(parsed.data).length === 0) {
+      return { ok: false, error: "Нет полей для обновления", status: 400 }
+    }
+
+    const data: { stopLossPrice?: number | null } = {}
+    if (parsed.data.stopLossPrice !== undefined) {
+      data.stopLossPrice = parsed.data.stopLossPrice
+    }
+
+    const n = await tradesRepository.patchTradeFields(userId, tradeId, data)
+    if (n.count === 0) {
+      return { ok: false, error: "Not found", status: 404 }
+    }
+
+    const row = await tradesRepository.findFirstActiveWithLegs(userId, tradeId)
+    if (!row) {
+      return { ok: false, error: "Not found", status: 404 }
+    }
+    return {
+      ok: true,
+      trade: serializeTradeListItem(await packSingle(userId, toTradeWithLegs(row))),
+    }
   },
 
   async deleteTradeOrExit(

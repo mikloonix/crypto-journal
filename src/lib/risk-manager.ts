@@ -1,5 +1,10 @@
-import { Entry, Exit, RiskSettings } from "@prisma/client"
+import { Entry, RiskSettings } from "@prisma/client"
 import { formatDecimal, formatPercent } from "./format-amount"
+import {
+  contractQtyFromMargin,
+  notionalFromMarginUsdt,
+  weightedAvgEntryPrice,
+} from "@/server/trading/position-margin"
 
 export type { Trade } from "@prisma/client"
 export {
@@ -20,12 +25,16 @@ export function calculateRiskForTrade(
   stopLossPrice: number,
   settings: RiskSettings,
 ): RiskCheckResult {
-  const totalVolume = entries.reduce((sum, e) => sum + e.volume, 0)
-  const avgEntryPrice = entries.reduce((sum, e) => sum + e.price * e.volume, 0) / totalVolume
+  const avgEntry = weightedAvgEntryPrice(entries)
+  const contractVol = entries.reduce(
+    (s, e) => s + contractQtyFromMargin(e.volume, e.price, e.leverage),
+    0,
+  )
 
-  const priceDiff = Math.abs(avgEntryPrice - stopLossPrice)
-  const riskAmount = priceDiff * totalVolume
-  const riskPercent = (riskAmount / settings.accountBalance) * 100
+  const priceDiff = Math.abs(avgEntry - stopLossPrice)
+  const riskAmount = priceDiff * contractVol
+  const balance = settings.accountBalance > 0 ? settings.accountBalance : 1
+  const riskPercent = (riskAmount / balance) * 100
 
   const warnings: string[] = []
 
@@ -35,7 +44,8 @@ export function calculateRiskForTrade(
     )
   }
 
-  if (riskAmount > settings.accountBalance * 0.1) {
+  const maxRiskUsdt = notionalFromMarginUsdt(balance, 1) * 0.1
+  if (riskAmount > maxRiskUsdt) {
     warnings.push(`⚠️ Сумма риска ${formatDecimal(riskAmount)} превышает 10% депозита`)
   }
 

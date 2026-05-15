@@ -234,6 +234,17 @@ export const tradesRepository = {
     })
   },
 
+  patchTradeFields(
+    userId: string,
+    tradeId: string,
+    data: { stopLossPrice?: number | null },
+  ) {
+    return prisma.trade.updateMany({
+      where: { id: tradeId, ...whereActiveTrades(userId) },
+      data,
+    })
+  },
+
   findOpenTradeId(
     userId: string,
     accountId: string,
@@ -294,6 +305,7 @@ export const tradesRepository = {
     notes?: string
     entryFee: number
     openingFunding: number
+    stopLossPrice?: number | null
     entryCreate: {
       price: number
       volume: number
@@ -313,6 +325,7 @@ export const tradesRepository = {
       notes,
       entryFee,
       openingFunding,
+      stopLossPrice,
       entryCreate,
     } = params
     return prisma.trade.create({
@@ -327,6 +340,7 @@ export const tradesRepository = {
         notes,
         fee: entryFee,
         funding: openingFunding,
+        ...(stopLossPrice != null && stopLossPrice > 0 ? { stopLossPrice } : {}),
         entries: { create: entryCreate },
       },
       include: tradeIncludeActive,

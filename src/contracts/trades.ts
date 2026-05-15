@@ -1,5 +1,7 @@
 /** Сериализованные сущности журнала (даты — ISO-строки после JSON). */
 
+import type { JournalRiskSummaryDto, TradeRiskDto } from "@/contracts/risk"
+
 export type LiquidityRoleDto = "MAKER" | "TAKER"
 export type DirectionDto = "LONG" | "SHORT"
 export type TradeStatusDto = "OPEN" | "CLOSED"
@@ -63,6 +65,7 @@ export type JournalSummaryDto = {
   roiPercent: number
   openCount: number
   equityCurve: EquityCurvePointDto[]
+  risk: JournalRiskSummaryDto
 }
 
 export type TradeListItemDto = {
@@ -73,6 +76,7 @@ export type TradeListItemDto = {
   marketType: MarketTypeDto
   direction: DirectionDto
   status: TradeStatusDto
+  stopLossPrice: number | null
   strategy: string | null
   emotionEntry: string | null
   emotionExit: string | null
@@ -86,6 +90,7 @@ export type TradeListItemDto = {
   entries: EntryDto[]
   exits: ExitDto[]
   journal: TradeJournalMetricsDto
+  risk: TradeRiskDto
 }
 
 export type TradesJournalListDto = {

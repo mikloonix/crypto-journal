@@ -24,6 +24,8 @@ type Props = {
   setPrice: Dispatch<SetStateAction<string>>
   volume: string
   setVolume: Dispatch<SetStateAction<string>>
+  stopLoss: string
+  setStopLoss: Dispatch<SetStateAction<string>>
   leverage: number
   setLeverage: Dispatch<SetStateAction<number>>
   strategy: string
@@ -53,6 +55,8 @@ export function TradeOpenForm({
   setPrice,
   volume,
   setVolume,
+  stopLoss,
+  setStopLoss,
   leverage,
   setLeverage,
   strategy,
@@ -72,8 +76,8 @@ export function TradeOpenForm({
   onSubmit,
 }: Props) {
   const entryNotional =
-    Number.isFinite(Number(price)) && Number.isFinite(Number(volume)) && Number(volume) > 0
-      ? notionalUsdt(Number(price), Number(volume))
+    Number.isFinite(Number(volume)) && Number(volume) > 0
+      ? notionalUsdt(Number(volume), leverage)
       : 0
   const suggestedEntryFee = feeUsdtFromBps(
     entryNotional,
@@ -146,6 +150,15 @@ export function TradeOpenForm({
           value={volume}
           onChange={(e) => setVolume(e.target.value)}
           className="bg-gray-800 p-2 w-full rounded border border-gray-700"
+        />
+      </div>
+      <div>
+        <label className="text-sm text-gray-400">Стоп-лосс (цена)</label>
+        <input
+          value={stopLoss}
+          onChange={(e) => setStopLoss(e.target.value)}
+          className="bg-gray-800 p-2 w-full rounded border border-gray-700"
+          placeholder="опц., для риска"
         />
       </div>
       <div className="min-w-[140px]">

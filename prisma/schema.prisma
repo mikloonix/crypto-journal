@@ -183,6 +183,8 @@ model Trade {
   marketType    MarketType  @default(FUTURE)
   direction     Direction
   status        TradeStatus @default(OPEN)
+  /// Стоп-лосс на сделку (этап 4); для FUTURE — warning если не задан.
+  stopLossPrice Float?
 
   entries Entry[]
   exits   Exit[]

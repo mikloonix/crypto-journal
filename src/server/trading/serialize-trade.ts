@@ -53,6 +53,7 @@ export function serializeTradeListItem(t: TradeWithJournal): TradeListItemDto {
     marketType: t.marketType as MarketTypeDto,
     direction: t.direction as DirectionDto,
     status: t.status as TradeStatusDto,
+    stopLossPrice: t.stopLossPrice ?? null,
     strategy: t.strategy,
     emotionEntry: t.emotionEntry,
     emotionExit: t.emotionExit,
@@ -66,5 +67,6 @@ export function serializeTradeListItem(t: TradeWithJournal): TradeListItemDto {
     entries,
     exits,
     journal: t.journal,
+    risk: t.risk,
   }
 }

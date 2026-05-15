@@ -62,4 +62,4 @@
 - **Расчёты:** `src/server/trading/cashflow-usdt.ts` (USDT), `equity-timeline.ts` (equity журнала и кривая аналитики); без дублирования в UI.
 - **API:** `GET|POST /api/cashflows`, `PATCH|DELETE /api/cashflows/[id]`; ответы в envelope проекта.
 - **UI:** `/portfolio` — таблица, период, форма; дашборд/журнал/аналитика используют тот же скоуп счёта, что и журнал (`journalAllAccounts` / `activeAccountId`).
-- **Миграции:** схема может быть применена через `npx prisma db push` или отдельная миграция под ваш процесс.
+- **Миграции:** `20260515100000_stage35_cashflows`. На существующей БД без `_prisma_migrations` — baseline, см. `04-stage-risk-management.md` (раздел Prisma).

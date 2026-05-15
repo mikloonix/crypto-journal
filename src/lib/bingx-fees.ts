@@ -4,10 +4,18 @@ import { LiquidityRole } from "@prisma/client"
 export const BINGX_DEFAULT_MAKER_FEE_BPS = 2
 export const BINGX_DEFAULT_TAKER_FEE_BPS = 5
 
-/** Номинал сделки в USDT (линейный контракт): цена × объём позиции. */
-export function notionalUsdt(price: number, volume: number): number {
-  if (!Number.isFinite(price) || !Number.isFinite(volume) || price <= 0 || volume <= 0) return 0
-  return price * volume
+import { notionalFromMarginUsdt } from "@/server/trading/position-margin"
+
+/**
+ * Номинал в USDT: маржа × плечо (этап 4).
+ * @param marginUsdt маржа в USDT (`Entry.volume` / `Exit.volume`)
+ * @param leverage плечо (по умолчанию 1)
+ */
+export function notionalUsdt(
+  marginUsdt: number,
+  leverage: number | null | undefined = 1,
+): number {
+  return notionalFromMarginUsdt(marginUsdt, leverage)
 }
 
 type LiquidityInput = LiquidityRole | "MAKER" | "TAKER"
