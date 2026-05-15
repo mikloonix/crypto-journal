@@ -21,6 +21,8 @@ export type EntryDto = {
 export type ExitLegJournalDto = {
   pnl: number
   roiPct: number
+  /** ROI закрытого PnL / стартовый депозит журнала, %. */
+  depositRoiPct: number
 }
 
 export type ExitDto = {
@@ -46,6 +48,8 @@ export type TradeJournalMetricsDto = {
   maxLeverage: number
   displayPnl: number | null
   tradeRoiPct: number | null
+  /** ROI закрытого PnL / стартовый депозит журнала, %. */
+  depositRoiPct: number | null
   /** Длительность от первого события (createdAt/entry) до closedAt; только для CLOSED */
   durationMs: number | null
 }

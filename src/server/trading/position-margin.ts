@@ -18,7 +18,7 @@ export function notionalFromMarginUsdt(
   return marginUsdt * effectiveLeverage(leverage)
 }
 
-/** Объём контракта (qty) = маржа × плечо / цена. */
+/** Объём контракта (qty) = маржа × плечо / цена (для ноги входа — цена этой ноги). */
 export function contractQtyFromMargin(
   marginUsdt: number,
   price: number,
@@ -26,6 +26,19 @@ export function contractQtyFromMargin(
 ): number {
   if (!Number.isFinite(price) || price <= 0) return 0
   return notionalFromMarginUsdt(marginUsdt, leverage) / price
+}
+
+/**
+ * Контракты по марже выхода: перевод margin→qty по **средней цене входа**,
+ * не по цене выхода (иначе при другой цене gross PnL ≈ 0).
+ */
+export function contractQtyFromExitMargin(
+  exitMarginUsdt: number,
+  avgEntryPrice: number,
+  leverage: number | null | undefined,
+): number {
+  if (!Number.isFinite(avgEntryPrice) || avgEntryPrice <= 0) return 0
+  return notionalFromMarginUsdt(exitMarginUsdt, leverage) / avgEntryPrice
 }
 
 export function sumEntryMarginUsdt(entries: Pick<Entry, "volume">[]): number {

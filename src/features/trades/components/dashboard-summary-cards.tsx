@@ -16,11 +16,11 @@ export function DashboardSummaryCards({ balance, totalPnL, roi, openCount, risk 
     <div className="mb-6 space-y-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded bg-[#111] p-4">
-          <p className="text-sm text-gray-400">Баланс (оценка)</p>
+          <p className="text-sm text-gray-400">Депозит</p>
           <p className="text-xl">{formatInQuote(balance, "USDT")}</p>
         </div>
         <div className="rounded bg-[#111] p-4">
-          <p className="text-sm text-gray-400">PnL (закрытые)</p>
+          <p className="text-sm text-gray-400">PnL</p>
           <p className={totalPnL >= 0 ? "text-xl text-green-400" : "text-xl text-red-400"}>
             {formatInQuote(totalPnL, "USDT")}
           </p>

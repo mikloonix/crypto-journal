@@ -15,8 +15,11 @@ import type {
   DashboardDayStatsDto,
 } from "@/contracts/dashboard"
 import { riskSettingsRepository } from "@/server/repositories/risk-settings-repository"
+import { cashflowRepository } from "@/server/repositories/cashflow-repository"
 import { tradesRepository } from "@/server/repositories/trades-repository"
 import { buildTradeJournalMetrics, type TradeWithLegs } from "@/server/trading/journal-metrics"
+import { netCashflowPortfolioUsdt } from "@/server/trading/cashflow-usdt"
+import { capitalUsdtBeforeExclusive } from "@/server/trading/equity-timeline"
 import { Direction } from "@prisma/client"
 
 function toTradeWithLegs(row: {
@@ -58,13 +61,59 @@ export const dashboardService = {
       pnlUsdt += pnlRoiForExitLeg(t.direction, t.entries, ex).pnl
     }
 
+    const rs = await riskSettingsRepository.upsertDefaults(userId)
+    const journalAllAccounts = accountId != null ? false : (rs.journalAllAccounts ?? false)
+    const journalAccountId = accountId ?? rs.activeAccountId ?? undefined
+    const scope = { journalAllAccounts, journalAccountId }
+
+    let cashflows: Awaited<ReturnType<typeof cashflowRepository.listForJournalScope>> = []
+    try {
+      cashflows = await cashflowRepository.listForJournalScope(
+        userId,
+        journalAllAccounts,
+        journalAccountId,
+      )
+    } catch {
+      /* journal without cashflow table */
+    }
+
+    const tStart = start.getTime()
+    const cfBefore = cashflows.filter((c) => c.timestamp.getTime() < tStart)
+    const tradesBefore = await tradesRepository.findClosedTradesClosedBefore(
+      userId,
+      start,
+      journalAllAccounts,
+      journalAccountId,
+    )
+    const journalHasCashflow = cashflows.length > 0
+    let balanceAtDayStart = capitalUsdtBeforeExclusive(
+      start,
+      tradesBefore as TradeWithLegs[],
+      cfBefore,
+      scope,
+      journalHasCashflow,
+    )
+    if (!Number.isFinite(balanceAtDayStart)) balanceAtDayStart = 0
+    if (balanceAtDayStart < 1e-9 && journalHasCashflow) {
+      const netBefore = netCashflowPortfolioUsdt(cfBefore, scope)
+      if (netBefore > 1e-9) {
+        balanceAtDayStart = netBefore
+      } else {
+        const netAll = netCashflowPortfolioUsdt(cashflows, scope)
+        balanceAtDayStart = Math.max(netAll, 0)
+      }
+    }
+
+    const roiDayPercent =
+      balanceAtDayStart > 1e-9 ? (pnlUsdt / balanceAtDayStart) * 100 : null
+
     return {
       ok: true,
       data: {
         pnlUsdt,
-        /** Количество сделок (выходов / ног) за интервал, не закрытых трейдов целиком. */
         closedCount: exits.length,
-        roiDayStatus: "deferred_until_portfolio",
+        roiDayPercent,
+        balanceAtDayStartUsdt: balanceAtDayStart,
         displayCurrency: "USDT",
       },
     }

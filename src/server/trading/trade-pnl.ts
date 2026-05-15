@@ -1,5 +1,6 @@
 import type { Entry, Exit, Trade } from "@prisma/client"
 import {
+  contractQtyFromExitMargin,
   contractQtyFromMargin,
   sumEntryMarginUsdt,
   sumExitMarginUsdt,
@@ -10,6 +11,7 @@ import {
 /** Единый расчёт PnL по сделке (fee/funding на уровне Trade). volume = маржа USDT. */
 export function calculateTradePnL(trade: Trade & { entries: Entry[]; exits: Exit[] }): number {
   const lev = tradeLeverageFromEntries(trade.entries)
+  const avgEntry = weightedAvgEntryPrice(trade.entries)
 
   let entryValue = 0
   for (const e of trade.entries) {
@@ -19,7 +21,7 @@ export function calculateTradePnL(trade: Trade & { entries: Entry[]; exits: Exit
 
   let exitValue = 0
   for (const x of trade.exits) {
-    const q = contractQtyFromMargin(x.volume, x.price, lev)
+    const q = contractQtyFromExitMargin(x.volume, avgEntry, lev)
     exitValue += q * x.price
   }
 
@@ -53,13 +55,16 @@ export function calculateRealizedPnL(
   if (avgEntry <= 0) return 0
 
   let exitQty = 0
+  for (const x of trade.exits) {
+    exitQty += contractQtyFromExitMargin(x.volume, avgEntry, lev)
+  }
+  if (exitQty <= 0 || avgEntry <= 0) return 0
+
   let exitValue = 0
   for (const x of trade.exits) {
-    const q = contractQtyFromMargin(x.volume, x.price, lev)
-    exitQty += q
+    const q = contractQtyFromExitMargin(x.volume, avgEntry, lev)
     exitValue += q * x.price
   }
-  if (exitQty <= 0) return 0
   const avgExit = exitValue / exitQty
 
   let pnl = (avgExit - avgEntry) * exitQty

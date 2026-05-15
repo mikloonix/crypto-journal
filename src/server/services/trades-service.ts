@@ -67,7 +67,7 @@ async function packJournalList(rows: TradeWithLegs[], userId: string): Promise<T
     scope,
   )
   const summary = { ...summaryBase, risk: riskSummary }
-  const withJ = attachJournalToTradesList(rows, perTrade)
+  const withJ = attachJournalToTradesList(rows, perTrade, summaryBase.initialDepositUsdt)
   return {
     trades: withJ.map(serializeTradeListItem),
     summary,
@@ -77,7 +77,11 @@ async function packJournalList(rows: TradeWithLegs[], userId: string): Promise<T
 async function packSingle(userId: string, row: TradeWithLegs): Promise<TradeWithJournal> {
   const list = await packJournalList([row], userId)
   const risk = list.trades[0]?.risk
-  const withJ = attachJournalToTradesList([row], risk ? new Map([[row.id, risk]]) : undefined)
+  const withJ = attachJournalToTradesList(
+    [row],
+    risk ? new Map([[row.id, risk]]) : undefined,
+    list.summary.initialDepositUsdt,
+  )
   return withJ[0]!
 }
 

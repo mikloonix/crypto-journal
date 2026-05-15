@@ -70,13 +70,14 @@
   - время входа — автозаполнение (серверное время), но показывать в UI
   - валидаторы (zod) и обработка ошибок
 
-## Расчеты
+## Расчеты (реализация)
 
-Нужно централизовать расчеты (один модуль/один источник):
+Единый движок: `src/server/trading/trade-pnl.ts`, `position-margin.ts`, `exit-leg-pnl.ts`.
 
-- PnL на основе операций `Entry/Exit`, с учетом direction (LONG/SHORT)
-- комиссии и funding
-- ROI % относительно используемого депозита (определить правило: от `RiskSettings.accountBalance` или фиксированного initial balance)
+- **Маржа** (`Entry.volume` / `Exit.volume`) в USDT; qty контракта на входе = `margin×leverage/price`; на выходе — `margin×leverage/**avgEntry**` (не пересчёт по цене выхода).
+- PnL закрытого трейда: `calculateTradePnL`; по ноге выхода: `pnlRoiForExitLeg`.
+- **ROI** (журнал CLOSED): `tradeRoiPct` = PnL / суммарная маржа входа × 100%.
+- **ROI деп.** = PnL / `summary.initialDepositUsdt` журнала × 100% (net cashflow в скоупе).
 
 ## Тест-план (минимум)
 

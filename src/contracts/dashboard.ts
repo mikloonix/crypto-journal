@@ -4,8 +4,10 @@ export type DashboardDayStatsDto = {
   pnlUsdt: number
   /** Количество выходов (ног) за день, не число закрытых трейдов целиком. */
   closedCount: number
-  /** ROI за день до этапа портфеля не считаем. */
-  roiDayStatus: "deferred_until_portfolio"
+  /** ROI за день = PnL дня / капитал на начало дня × 100; null если база ≤ 0. */
+  roiDayPercent: number | null
+  /** Капитал на начало календарного дня (cashflow + закрытый PnL до dayStart). */
+  balanceAtDayStartUsdt: number
   displayCurrency: "USDT"
 }
 

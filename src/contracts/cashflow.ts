@@ -15,6 +15,8 @@ export type CashflowDto = {
   amountBodyUsdt: number
   /** Комиссия в USDT. */
   feeUsdt: number
+  /** Нетто в USDT (пополнение: сумма − fee; вывод: −(сумма + fee)). */
+  netEffectUsdt: number
   timestamp: string
   note: string | null
 }

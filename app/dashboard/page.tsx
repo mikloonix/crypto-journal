@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import EquityChart from "@/components/EquityChart"
 import { MAX_LEVERAGE_UI } from "@/lib/trading-symbols"
@@ -33,6 +34,7 @@ export default function DashboardPage() {
   const authed = gate === "authed"
   const {
     ready: accountReady,
+    accounts,
     journalAllAccounts,
     resolvedActiveAccountId,
     activeAccountId,
@@ -152,6 +154,10 @@ export default function DashboardPage() {
     )
   }, [tradingDefaults.maxLeverage])
 
+  useEffect(() => {
+    if (gate === "guest") router.refresh()
+  }, [gate, router])
+
   if (gate === "loading") {
     return (
       <div className="flex min-h-[40vh] items-center justify-center text-[var(--text-secondary)]">
@@ -160,13 +166,33 @@ export default function DashboardPage() {
     )
   }
   if (gate === "guest") {
-    return null
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center text-[var(--text-secondary)]">
+        Синхронизация сессии…
+      </div>
+    )
   }
 
-  if (!accountReady || !tradeAccountId) {
+  if (!accountReady) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center text-[var(--text-secondary)]">
         Подготовка счёта…
+      </div>
+    )
+  }
+
+  if (!tradeAccountId && accounts.length === 0) {
+    return (
+      <div className="mx-auto max-w-md rounded-lg border border-[var(--border)] bg-[var(--surface)] p-6 text-center">
+        <p className="mb-4 text-[var(--text-secondary)]">
+          Нет торгового счёта — журнал и формы недоступны.
+        </p>
+        <Link
+          href="/settings/accounts"
+          className="inline-block rounded bg-[var(--accent-blue)] px-4 py-2 text-sm text-white hover:opacity-90"
+        >
+          Добавить счёт
+        </Link>
       </div>
     )
   }

@@ -70,6 +70,17 @@ export function cashflowPortfolioDeltaUsdt(cf: Cashflow, scope: JournalEquitySco
   return 0
 }
 
+/** Нетто-эффект одной операции в USDT (для таблицы; TRANSFER без контекста счёта = 0). */
+export function cashflowNetEffectUsdtRow(cf: Cashflow): number {
+  const body = cashflowAmountBodyUsdt(cf)
+  const feeU = cashflowFeeUsdt(cf)
+  if (!Number.isFinite(body)) return NaN
+  const fee = Number.isFinite(feeU) ? feeU : 0
+  if (cf.type === CashflowType.DEPOSIT) return body - fee
+  if (cf.type === CashflowType.WITHDRAWAL) return -(body + fee)
+  return 0
+}
+
 export function netCashflowPortfolioUsdt(cashflows: Cashflow[], scope: JournalEquityScope): number {
   let s = 0
   for (const cf of cashflows) {

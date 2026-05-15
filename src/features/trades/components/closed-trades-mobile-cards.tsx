@@ -69,6 +69,7 @@ export function ClosedTradesMobileCards({
             const j = t.journal
             const pnl = j.displayPnl ?? 0
             const roi = j.tradeRoiPct ?? 0
+            const depositRoi = j.depositRoiPct
             const open = expanded[t.id] ?? false
             return (
               <div
@@ -94,8 +95,21 @@ export function ClosedTradesMobileCards({
                       {formatInQuote(pnl, q)}
                     </div>
                     <div className={roi > 0 ? "text-green-400" : roi < 0 ? "text-red-400" : ""}>
-                      {formatPercent(roi)}%
+                      ROI {formatPercent(roi)}%
                     </div>
+                    {depositRoi != null ? (
+                      <div
+                        className={
+                          depositRoi > 0
+                            ? "text-green-400"
+                            : depositRoi < 0
+                              ? "text-red-400"
+                              : "text-gray-400"
+                        }
+                      >
+                        ROI деп. {formatPercent(depositRoi)}%
+                      </div>
+                    ) : null}
                   </div>
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-gray-400">

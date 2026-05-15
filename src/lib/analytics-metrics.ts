@@ -27,6 +27,7 @@ import {
   capitalUsdtBeforeExclusive,
   maxDrawdownFromBalances,
 } from "@/server/trading/equity-timeline"
+import { netCashflowPortfolioUsdt } from "@/server/trading/cashflow-usdt"
 import { JOURNAL_INITIAL_DEPOSIT_USDT } from "@/server/trading/equity-constants"
 
 function toLegs(t: TradeWithLegs): TradeWithLegs {
@@ -129,6 +130,12 @@ export function buildAnalyticsSnapshot(input: BuildAnalyticsInput): AnalyticsSna
   )
   const capital0 = Number.isFinite(capital0Raw) ? capital0Raw : JOURNAL_INITIAL_DEPOSIT_USDT
 
+  const allCashflows = [...cashflowsStrictlyBeforeStart, ...cashflowsInPeriod]
+  const netCfAll = netCashflowPortfolioUsdt(allCashflows, scope)
+  const journalDepositUsdt = journalHasCashflow
+    ? Math.max(Number.isFinite(netCfAll) ? netCfAll : 0, 0)
+    : JOURNAL_INITIAL_DEPOSIT_USDT
+
   const period = tradesClosedInPeriod
     .filter((t) => t.status === TradeStatus.CLOSED && t.closedAt != null)
     .slice()
@@ -136,7 +143,13 @@ export function buildAnalyticsSnapshot(input: BuildAnalyticsInput): AnalyticsSna
 
   const pnls = period.map((t) => pnlForClosedTrade(t))
   const totalPnl = pnls.reduce((a, b) => a + b, 0)
-  const pnlPercentPeriod = capital0 > 0 ? (totalPnl / capital0) * 100 : null
+  const roiDenom =
+    capital0 > 1e-9
+      ? capital0
+      : journalDepositUsdt > 1e-9
+        ? journalDepositUsdt
+        : null
+  const pnlPercentPeriod = roiDenom != null ? (totalPnl / roiDenom) * 100 : null
 
   let winCount = 0
   let lossCount = 0
@@ -148,6 +161,7 @@ export function buildAnalyticsSnapshot(input: BuildAnalyticsInput): AnalyticsSna
   let best: number | null = null
   let worst: number | null = null
   let maxRoi: number | null = null
+  let maxDepositRoi: number | null = null
   let sumHolding = 0
   let holdingN = 0
 
@@ -164,12 +178,16 @@ export function buildAnalyticsSnapshot(input: BuildAnalyticsInput): AnalyticsSna
     } else {
       breakevenCount++
     }
-    if (best == null || p > best) best = p
-    if (worst == null || p < worst) worst = p
+    if (p > 0 && (best == null || p > best)) best = p
+    if (p < 0 && (worst == null || p < worst)) worst = p
 
-    const j = buildTradeJournalMetrics(toLegs(period[i]!))
+    const j = buildTradeJournalMetrics(toLegs(period[i]!), journalDepositUsdt)
     if (j.tradeRoiPct != null && Number.isFinite(j.tradeRoiPct)) {
       maxRoi = maxRoi == null ? j.tradeRoiPct : Math.max(maxRoi, j.tradeRoiPct)
+    }
+    if (journalDepositUsdt > 0) {
+      const dr = (p / journalDepositUsdt) * 100
+      maxDepositRoi = maxDepositRoi == null ? dr : Math.max(maxDepositRoi, dr)
     }
     if (j.durationMs != null && j.durationMs >= 0) {
       sumHolding += j.durationMs
@@ -336,6 +354,7 @@ export function buildAnalyticsSnapshot(input: BuildAnalyticsInput): AnalyticsSna
     totalPnlUsdt: totalPnl,
     pnlPercentPeriod,
     capitalAtPeriodStartUsdt: capital0,
+    journalDepositUsdt,
     closedCount,
     winCount,
     lossCount,
@@ -350,6 +369,7 @@ export function buildAnalyticsSnapshot(input: BuildAnalyticsInput): AnalyticsSna
     bestTradePnlUsdt: best,
     worstTradePnlUsdt: worst,
     maxTradeRoiPercent: maxRoi,
+    maxDepositRoiPercent: maxDepositRoi,
     sharpeRatio,
     maxDrawdownUsdt,
     maxDrawdownPercent,

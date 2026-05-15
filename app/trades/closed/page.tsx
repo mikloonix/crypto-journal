@@ -35,7 +35,7 @@ type ExitRow = { exit: ExitDto; trade: TradeListItemDto }
 
 type PeriodPreset = "all" | "today" | "week" | "month" | "custom"
 
-const TRADES_COL_SPAN = 18
+const TRADES_COL_SPAN = 19
 function formatGroupAggPnl(trades: TradeListItemDto[], sumPnl: number): string {
   const qs = new Set(trades.map((t) => quoteCurrencyFromSymbol(t.symbol)))
   if (qs.size === 1) {
@@ -268,10 +268,6 @@ export default function ClosedTradesPage() {
             </button>
           </div>
         </div>
-        <p className="text-xs text-gray-500">
-          Трейды — только полностью закрытые позиции. Сделки — каждый выход по времени (в т.ч. частичный, пока
-          позиция ещё открыта).
-        </p>
       </div>
 
       <div className="mb-4 flex flex-col gap-3 rounded-lg border border-gray-800 bg-[#0b0b0b] p-3 text-sm">
@@ -409,6 +405,7 @@ export default function ClosedTradesPage() {
                   <th className="py-2 pr-2">Выход (ср.)</th>
                   <th className="py-2 pr-2">PnL</th>
                   <th className="py-2 pr-2">ROI</th>
+                  <th className="py-2 pr-2">ROI деп.</th>
                   <th className="py-2 pr-2">Комис.</th>
                   <th className="py-2 pr-2">Фанд.</th>
                   <th className="py-2 pr-2">Длит.</th>
@@ -454,7 +451,7 @@ export default function ClosedTradesPage() {
                           ROI:{" "}
                           {g.groupRoiPct != null ? `${formatPercent(g.groupRoiPct)}%` : "—"}
                         </td>
-                        <td colSpan={9} className="py-2" />
+                        <td colSpan={10} className="py-2" />
                       </tr>
                     ) : null}
                     {g.trades.map((t) => {
@@ -462,6 +459,7 @@ export default function ClosedTradesPage() {
                       const j = t.journal
                       const pnl = j.displayPnl ?? 0
                       const roi = j.tradeRoiPct ?? 0
+                      const depositRoi = j.depositRoiPct
 
                       return (
                         <Fragment key={t.id}>
@@ -498,6 +496,17 @@ export default function ClosedTradesPage() {
                               }
                             >
                               {formatPercent(roi)}%
+                            </td>
+                            <td
+                              className={
+                                depositRoi != null && depositRoi > 0
+                                  ? "text-green-400"
+                                  : depositRoi != null && depositRoi < 0
+                                    ? "text-red-400"
+                                    : ""
+                              }
+                            >
+                              {depositRoi != null ? `${formatPercent(depositRoi)}%` : "—"}
                             </td>
                             <td className="py-2 pr-2">{formatInQuote(t.fee, q)}</td>
                             <td className="py-2 pr-2">{formatInQuote(t.funding, q)}</td>
@@ -661,9 +670,6 @@ export default function ClosedTradesPage() {
         </>
       ) : (
         <div className="overflow-x-auto">
-          <p className="mb-2 text-xs text-gray-500">
-            Каждая строка — один выход (частичное или полное закрытие). Трейд может быть ещё OPEN.
-          </p>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-800 text-left text-gray-400">
@@ -681,6 +687,7 @@ export default function ClosedTradesPage() {
                 <th className="py-2 pr-2">Фандинг</th>
                 <th className="py-2 pr-2">PnL</th>
                 <th className="py-2 pr-2">ROI</th>
+                <th className="py-2 pr-2">ROI деп.</th>
                 <th className="py-2 pr-2">Стратегия</th>
                 <th className="py-2 pr-2">Эмоция вход</th>
                 <th className="py-2 pr-2">Эмоция выход</th>
@@ -721,13 +728,14 @@ export default function ClosedTradesPage() {
                         ROI:{" "}
                         {g.groupRoiPct != null ? `${formatPercent(g.groupRoiPct)}%` : "—"}
                       </td>
-                      <td colSpan={4} className="py-2" />
+                      <td colSpan={5} className="py-2" />
                     </tr>
                   ) : null}
                   {g.rows.map(({ exit: x, trade: t }) => {
                     const q = quoteCurrencyFromSymbol(t.symbol)
                     const pnl = x.legJournal.pnl
                     const roiPct = x.legJournal.roiPct
+                    const depositRoiPct = x.legJournal.depositRoiPct
                     const avgIn = t.journal.avgEntry
                     return (
                       <tr key={x.id} className="border-b border-gray-900">
@@ -768,6 +776,17 @@ export default function ClosedTradesPage() {
                           }
                         >
                           {formatPercent(roiPct)}%
+                        </td>
+                        <td
+                          className={
+                            depositRoiPct > 0
+                              ? "text-green-400"
+                              : depositRoiPct < 0
+                                ? "text-red-400"
+                                : ""
+                          }
+                        >
+                          {formatPercent(depositRoiPct)}%
                         </td>
                         <td className="max-w-[140px] truncate py-2 pr-2" title={t.strategy ?? ""}>
                           {t.strategy ?? "—"}

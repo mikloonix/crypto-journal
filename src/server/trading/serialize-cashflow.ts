@@ -1,6 +1,10 @@
 import type { Cashflow } from "@prisma/client"
 import type { CashflowDto } from "@/contracts/cashflow"
-import { cashflowAmountBodyUsdt, cashflowFeeUsdt } from "@/server/trading/cashflow-usdt"
+import {
+  cashflowAmountBodyUsdt,
+  cashflowFeeUsdt,
+  cashflowNetEffectUsdtRow,
+} from "@/server/trading/cashflow-usdt"
 
 export function serializeCashflow(row: Cashflow): CashflowDto {
   const body = cashflowAmountBodyUsdt(row)
@@ -18,6 +22,10 @@ export function serializeCashflow(row: Cashflow): CashflowDto {
     fee: row.fee,
     amountBodyUsdt: Number.isFinite(body) ? body : 0,
     feeUsdt: Number.isFinite(feeU) ? feeU : 0,
+    netEffectUsdt: (() => {
+      const n = cashflowNetEffectUsdtRow(row)
+      return Number.isFinite(n) ? n : 0
+    })(),
     timestamp: row.timestamp.toISOString(),
     note: row.note,
   }

@@ -5,6 +5,8 @@ export type AnalyticsSummaryDto = {
   /** (PnL периода / капитал на T_start) × 100; null если капитал ≤ 0 */
   pnlPercentPeriod: number | null
   capitalAtPeriodStartUsdt: number
+  /** Суммарный net cashflow в скоупе журнала (депозит для ROI к депозиту). */
+  journalDepositUsdt: number
   closedCount: number
   winCount: number
   lossCount: number
@@ -19,6 +21,8 @@ export type AnalyticsSummaryDto = {
   bestTradePnlUsdt: number | null
   worstTradePnlUsdt: number | null
   maxTradeRoiPercent: number | null
+  /** Макс. ROI сделки к депозиту (PnL / journalDeposit), %. */
+  maxDepositRoiPercent: number | null
   sharpeRatio: number | null
   maxDrawdownUsdt: number
   maxDrawdownPercent: number | null

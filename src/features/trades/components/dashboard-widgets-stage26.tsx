@@ -11,7 +11,7 @@ import {
   getDashboardDayStats,
   postAveragingCompute,
 } from "@/features/trades/api"
-import { formatDecimal, formatInQuote } from "@/lib/format-amount"
+import { formatDecimal, formatInQuote, formatPercent } from "@/lib/format-amount"
 import { zonedDayBoundsIsoForPreset } from "@/lib/zoned-date-range"
 import { useRouter } from "next/navigation"
 import { redirectOn401 } from "@/features/trades/session-expired"
@@ -130,8 +130,26 @@ export function DashboardDayStripStage26({
 
         <div className="bg-[#111] p-4 rounded">
           <p className="text-gray-400 text-sm">ROI за день</p>
-          <p className="text-xl text-gray-400">—</p>
-          <p className="mt-1 text-gray-400 text-sm">После портфеля (3.5)</p>
+          {loadErr ? (
+            <p className="text-sm text-[var(--accent-red)]">{loadErr}</p>
+          ) : stats?.roiDayPercent != null ? (
+            <p
+              className={`text-xl ${
+                stats.roiDayPercent >= 0 ? "text-green-400" : "text-red-400"
+              }`}
+            >
+              {formatPercent(stats.roiDayPercent)}%
+            </p>
+          ) : (
+            <p className="text-xl text-gray-400">—</p>
+          )}
+          {stats && stats.roiDayPercent == null ? (
+            <p className="mt-1 text-gray-400 text-sm">Нет капитала на начало дня</p>
+          ) : stats ? (
+            <p className="mt-1 text-gray-400 text-sm">
+              База: {formatInQuote(stats.balanceAtDayStartUsdt, stats.displayCurrency)}
+            </p>
+          ) : null}
         </div>
 
         <div className="bg-[#111] p-4 rounded">

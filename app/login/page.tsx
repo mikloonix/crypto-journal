@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { signIn } from 'next-auth/react'
+import { getSession, signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import type { FormEvent } from 'react'
 
@@ -10,20 +10,31 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    
-    const result = await signIn('credentials', {
-      email,
-      password,
-      redirect: false
-    })
-    
-    if (result?.error) {
-      setError('Invalid email or password')
-    } else {
+    setError('')
+    setSubmitting(true)
+
+    try {
+      const result = await signIn('credentials', {
+        email,
+        password,
+        redirect: false,
+      })
+
+      if (result?.error) {
+        setError('Неверный email или пароль')
+        return
+      }
+
+      // Cookie уже есть, но SessionProvider без getSession остаётся «гостем» → пустой UI
+      await getSession()
+      router.refresh()
       router.push('/dashboard')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -65,9 +76,10 @@ export default function LoginPage() {
           
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700"
+            disabled={submitting}
+            className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 disabled:opacity-60"
           >
-            Login
+            {submitting ? 'Вход…' : 'Войти'}
           </button>
         </form>
         

@@ -8,7 +8,7 @@ import { getAccounts } from "@/features/settings/api"
 import { useActiveAccount } from "@/features/trades/active-account-context"
 import { useProtectedPageSession } from "@/features/trades/hooks/use-protected-page-session"
 import { redirectOn401 } from "@/features/trades/session-expired"
-import { formatInQuote } from "@/lib/format-amount"
+import { formatDecimal, formatInQuote } from "@/lib/format-amount"
 import { useRouter } from "next/navigation"
 
 function typeLabel(t: CashflowDto["type"]): string {
@@ -119,12 +119,6 @@ export default function PortfolioPage() {
       cancelled = true
     }
   }, [authed, accountReady, refresh])
-
-  const scopeHint = journalAllAccounts
-    ? "Все счета"
-    : resolvedActiveAccountId
-      ? `Счёт: ${accountLabel(accounts, resolvedActiveAccountId)}`
-      : "Счёт не выбран"
 
   function resetFormFields() {
     const f = emptyForm()
@@ -244,14 +238,11 @@ export default function PortfolioPage() {
 
   return (
     <div className="text-[var(--text-primary)]">
-      <h1 className="mb-2 text-2xl font-semibold">Портфель</h1>
-      <p className="mb-4 text-sm text-[var(--text-secondary)]">
-        Cashflow в скоупе журнала: {scopeHint}. Отчёт в USDT.
-      </p>
+      <h1 className="mb-6 text-2xl font-semibold">Портфель</h1>
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded-xl bg-[var(--surface)] p-4">
-          <p className="text-sm text-[var(--text-secondary)]">Net за период</p>
+          <p className="text-sm text-[var(--text-secondary)]">Пополнения за период</p>
           <p className="text-xl font-medium tabular-nums">
             {summary == null
               ? "—"
@@ -259,13 +250,13 @@ export default function PortfolioPage() {
           </p>
         </div>
         <div className="rounded-xl bg-[var(--surface)] p-4">
-          <p className="text-sm text-[var(--text-secondary)]">Оценка баланса (скоуп)</p>
+          <p className="text-sm text-[var(--text-secondary)]">Депозит</p>
           <p className="text-xl font-medium tabular-nums">
             {summary == null ? "—" : formatInQuote(summary.balanceEstimateUsdt, "USDT")}
           </p>
         </div>
         <div className="rounded-xl bg-[var(--surface)] p-4">
-          <p className="text-sm text-[var(--text-secondary)]">PnL закрытых (скоуп)</p>
+          <p className="text-sm text-[var(--text-secondary)]">PnL</p>
           <p className="text-xl font-medium tabular-nums">
             {summary == null ? "—" : formatInQuote(summary.totalPnlClosedUsdt, "USDT")}
           </p>
@@ -465,8 +456,8 @@ export default function PortfolioPage() {
               <th className="p-2 font-medium">Тип</th>
               <th className="p-2 font-medium">Счета</th>
               <th className="p-2 font-medium">Сумма</th>
-              <th className="p-2 font-medium">Тело (USDT)</th>
-              <th className="p-2 font-medium">Fee (USDT)</th>
+              <th className="p-2 font-medium">Комиссия</th>
+              <th className="p-2 font-medium">Итог</th>
               <th className="p-2 font-medium" />
             </tr>
           </thead>
@@ -500,10 +491,15 @@ export default function PortfolioPage() {
                   </td>
                   <td className="p-2 tabular-nums">
                     {r.amount} {r.currency}
-                    {r.fee != null && r.fee > 0 ? ` (fee ${r.fee})` : ""}
                   </td>
-                  <td className="p-2 tabular-nums">{formatInQuote(r.amountBodyUsdt, "USDT")}</td>
-                  <td className="p-2 tabular-nums">{formatInQuote(r.feeUsdt, "USDT")}</td>
+                  <td className="p-2 tabular-nums">
+                    {r.feeUsdt > 0
+                      ? formatInQuote(r.feeUsdt, "USDT")
+                      : r.fee != null && r.fee > 0
+                        ? `${formatDecimal(r.fee, 4)} ${r.currency}`
+                        : "—"}
+                  </td>
+                  <td className="p-2 tabular-nums">{formatInQuote(r.netEffectUsdt, "USDT")}</td>
                   <td className="p-2 text-right whitespace-nowrap">
                     <button
                       type="button"
@@ -526,10 +522,6 @@ export default function PortfolioPage() {
           </tbody>
         </table>
       </div>
-      <p className="mt-4 text-xs text-[var(--text-secondary)]">
-        В таблице для пополнения USDT показано нетто (сумма − комиссия в USDT). Для вывода/перевода
-        смотрите сумму и комиссию в исходной валюте; эффект на equity считается на сервере.
-      </p>
     </div>
   )
 }

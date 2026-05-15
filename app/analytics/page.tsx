@@ -618,7 +618,9 @@ export default function AnalyticsPage() {
             {card(
               "PnL %",
               s.pnlPercentPeriod != null ? `${formatPercent(s.pnlPercentPeriod)}%` : "—",
-              s.pnlPercentPeriod == null ? "Капитал на начало периода ≤ 0" : undefined,
+              s.pnlPercentPeriod == null
+                ? "Нет базы для % (депозит / капитал на начало периода)"
+                : undefined,
             )}
             {card("Winrate", s.winratePercent != null ? `${formatPercent(s.winratePercent)}%` : "—")}
             {card("Сделок", String(s.closedCount))}
@@ -630,7 +632,7 @@ export default function AnalyticsPage() {
             {card("Gross loss", formatInQuote(s.grossLossUsdt, "USDT"))}
             {card("Best", s.bestTradePnlUsdt != null ? formatInQuote(s.bestTradePnlUsdt, "USDT") : "—")}
             {card("Worst", s.worstTradePnlUsdt != null ? formatInQuote(s.worstTradePnlUsdt, "USDT") : "—")}
-            {card("Стартовый депозит", formatInQuote(s.capitalAtPeriodStartUsdt, "USDT"))}
+            {card("Стартовый депозит", formatInQuote(s.journalDepositUsdt, "USDT"))}
           </div>
 
           <div>
@@ -649,6 +651,10 @@ export default function AnalyticsPage() {
                 s.avgHoldingMs != null ? `${formatDecimal(s.avgHoldingMs / 3600000)} ч` : "—",
               )}
               {card("Max ROI сделки", s.maxTradeRoiPercent != null ? `${formatPercent(s.maxTradeRoiPercent)}%` : "—")}
+              {card(
+                "Макс. ROI к депозиту",
+                s.maxDepositRoiPercent != null ? `${formatPercent(s.maxDepositRoiPercent)}%` : "—",
+              )}
             </div>
           </div>
         </div>

@@ -16,7 +16,7 @@
 | 2 | `02-stage-trades-domain-and-journal.md` | домен сделок: trade + entries/exits, журнал |
 | 2.3 ✅ | `02_3-stage-architecture-and-api-consistency.md` | слои backend, envelope API, DTO, data flow, декомпозиция UI |
 | 2.5 ✅ | `02_5-stage-app-shell-and-settings.md` | app shell, справочники, выбор `Account`, `/settings/accounts` + `/settings/catalogs` |
-| 2.6 ✅ (MVP) | `02_6-stage-dashboard-widgets.md` | день (USDT), усреднение (ручные цены/стоп); ROI/цель/фиат — см. док |
+| 2.6 ✅ | `02_6-stage-dashboard-widgets.md` | PnL/ROI за день, усреднение; цель дня — 4.5; фиат — позже |
 | 3 🔄 | `03-stage-analytics-and-visuals.md` | аналитика + графики; TZ из настроек; вкладки графиков без гистограммы «Распределение» в UI (см. док) |
 | 3.5 ✅ | `03_5-stage-portfolio-and-cashflows.md` | портфель, ввод/вывод, equity от депозитов |
 | 4 ✅ | `04-stage-risk-management.md` | риск-менеджмент, правила, подсветка (MVP; тесты — 5.5) |
