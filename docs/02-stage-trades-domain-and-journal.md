@@ -77,7 +77,7 @@
 - **Маржа** (`Entry.volume` / `Exit.volume`) в USDT; qty контракта на входе = `margin×leverage/price`; на выходе — `margin×leverage/**avgEntry**` (не пересчёт по цене выхода).
 - PnL закрытого трейда: `calculateTradePnL`; по ноге выхода: `pnlRoiForExitLeg`.
 - **ROI** (журнал CLOSED): `tradeRoiPct` = PnL / суммарная маржа входа × 100%.
-- **ROI деп.** = PnL / `summary.initialDepositUsdt` журнала × 100% (net cashflow в скоупе).
+- **ROI деп.** (закрытый трейд) = PnL / **equity журнала на момент закрытия** × 100%: чистый cashflow до `closedAt` плюс PnL всех сделок, закрытых строго раньше (тот же скоуп счёта). По ноге выхода — знаменатель на время этой ноги.
 
 ## Тест-план (минимум)
 

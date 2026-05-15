@@ -1,3 +1,4 @@
+import type { Cashflow } from "@prisma/client"
 import { Direction, MarketType, TradeStatus } from "@prisma/client"
 import {
   BINGX_DEFAULT_MAKER_FEE_BPS,
@@ -15,10 +16,15 @@ import { exitRepository } from "@/server/repositories/exit-repository"
 import type { TradesJournalListDto } from "@/contracts/trades"
 import {
   attachJournalToTradesList,
+  type DepositRoiDenoms,
   type TradeWithLegs,
   type TradeWithJournal,
 } from "@/server/trading/journal-metrics"
-import { buildJournalEquitySummary } from "@/server/trading/equity-timeline"
+import {
+  buildJournalEquitySummary,
+  capitalUsdtBeforeExclusive,
+} from "@/server/trading/equity-timeline"
+import type { JournalEquityScope } from "@/server/trading/cashflow-usdt"
 import { buildJournalRiskPack } from "@/server/trading/attach-journal-risk"
 import { tradeLeverageFromEntries } from "@/server/trading/position-margin"
 import { serializeTradeListItem } from "@/server/trading/serialize-trade"
@@ -36,16 +42,78 @@ function toTradeWithLegs(row: {
   }
 }
 
-async function packJournalList(rows: TradeWithLegs[], userId: string): Promise<TradesJournalListDto> {
-  const rs = await riskSettingsRepository.upsertDefaults(userId)
+function sortCashflowsAsc(cashflows: Cashflow[]): Cashflow[] {
+  if (cashflows.length <= 1) return cashflows
+  return [...cashflows].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+}
+
+function cashflowsStrictlyBefore(sortedAsc: Cashflow[], beforeUtc: Date): Cashflow[] {
+  const cut = beforeUtc.getTime()
+  let lo = 0
+  let hi = sortedAsc.length
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (sortedAsc[mid]!.timestamp.getTime() < cut) lo = mid + 1
+    else hi = mid
+  }
+  return sortedAsc.slice(0, lo)
+}
+
+function buildDepositRoiDenoms(
+  rows: TradeWithLegs[],
+  equityTrades: TradeWithLegs[],
+  cashflowsSorted: Cashflow[],
+  scope: JournalEquityScope,
+  journalHasCashflow: boolean,
+): DepositRoiDenoms {
+  const tradeById = new Map<string, number>()
+  const exitByKey = new Map<string, number>()
+  for (const row of rows) {
+    if (row.status === TradeStatus.CLOSED && row.closedAt) {
+      const cfs = cashflowsStrictlyBefore(cashflowsSorted, row.closedAt)
+      const raw = capitalUsdtBeforeExclusive(
+        row.closedAt,
+        equityTrades,
+        cfs,
+        scope,
+        journalHasCashflow,
+      )
+      if (Number.isFinite(raw) && raw > 1e-9) tradeById.set(row.id, raw)
+    }
+    for (const ex of row.exits) {
+      const cfs = cashflowsStrictlyBefore(cashflowsSorted, ex.timestamp)
+      const raw = capitalUsdtBeforeExclusive(
+        ex.timestamp,
+        equityTrades,
+        cfs,
+        scope,
+        journalHasCashflow,
+      )
+      if (Number.isFinite(raw) && raw > 1e-9) exitByKey.set(`${row.id}:${ex.id}`, raw)
+    }
+  }
+  return { tradeById, exitByKey }
+}
+
+async function loadJournalEquityPack(userId: string): Promise<{
+  equityTrades: TradeWithLegs[]
+  cashflowsSorted: Cashflow[]
+  scope: JournalEquityScope
+  journalHasCashflow: boolean
+}> {
+  const [rs, legacyCashflowAccountId] = await Promise.all([
+    riskSettingsRepository.upsertDefaults(userId),
+    accountRepository.findDefaultAccountId(userId),
+  ])
   const journalAllAccounts = rs.journalAllAccounts ?? false
   const journalAccountId = rs.activeAccountId ?? undefined
-  let cashflows: Awaited<ReturnType<typeof cashflowRepository.listForJournalScope>> = []
+  let cashflows: Cashflow[] = []
   try {
     cashflows = await cashflowRepository.listForJournalScope(
       userId,
       journalAllAccounts,
       journalAccountId,
+      legacyCashflowAccountId ?? undefined,
     )
   } catch (err) {
     console.error("cashflow list skipped (journal still loads):", err)
@@ -56,8 +124,25 @@ async function packJournalList(rows: TradeWithLegs[], userId: string): Promise<T
     journalAccountId,
   )
   const equityTrades = equityTradesRaw.map((t) => toTradeWithLegs(t))
-  const scope = { journalAllAccounts, journalAccountId }
-  const summaryBase = buildJournalEquitySummary(equityTrades, cashflows, scope, {
+  const scope: JournalEquityScope = {
+    journalAllAccounts,
+    journalAccountId,
+    ...(legacyCashflowAccountId ? { legacyCashflowAccountId } : {}),
+  }
+  const cashflowsSorted = sortCashflowsAsc(cashflows)
+  return {
+    equityTrades,
+    cashflowsSorted,
+    scope,
+    journalHasCashflow: cashflows.length > 0,
+  }
+}
+
+async function packJournalList(rows: TradeWithLegs[], userId: string): Promise<TradesJournalListDto> {
+  const { equityTrades, cashflowsSorted, scope, journalHasCashflow } =
+    await loadJournalEquityPack(userId)
+
+  const summaryBase = buildJournalEquitySummary(equityTrades, cashflowsSorted, scope, {
     openCount: rows.filter((t) => t.status === TradeStatus.OPEN).length,
   })
   const { perTrade, summary: riskSummary } = await buildJournalRiskPack(
@@ -67,7 +152,14 @@ async function packJournalList(rows: TradeWithLegs[], userId: string): Promise<T
     scope,
   )
   const summary = { ...summaryBase, risk: riskSummary }
-  const withJ = attachJournalToTradesList(rows, perTrade, summaryBase.initialDepositUsdt)
+  const depositDenoms = buildDepositRoiDenoms(
+    rows,
+    equityTrades,
+    cashflowsSorted,
+    scope,
+    journalHasCashflow,
+  )
+  const withJ = attachJournalToTradesList(rows, perTrade, depositDenoms)
   return {
     trades: withJ.map(serializeTradeListItem),
     summary,
@@ -75,14 +167,20 @@ async function packJournalList(rows: TradeWithLegs[], userId: string): Promise<T
 }
 
 async function packSingle(userId: string, row: TradeWithLegs): Promise<TradeWithJournal> {
-  const list = await packJournalList([row], userId)
-  const risk = list.trades[0]?.risk
-  const withJ = attachJournalToTradesList(
+  const { equityTrades, cashflowsSorted, scope, journalHasCashflow } =
+    await loadJournalEquityPack(userId)
+  const summaryBase = buildJournalEquitySummary(equityTrades, cashflowsSorted, scope, {
+    openCount: row.status === TradeStatus.OPEN ? 1 : 0,
+  })
+  const { perTrade } = await buildJournalRiskPack(userId, [row], summaryBase, scope)
+  const depositDenoms = buildDepositRoiDenoms(
     [row],
-    risk ? new Map([[row.id, risk]]) : undefined,
-    list.summary.initialDepositUsdt,
+    equityTrades,
+    cashflowsSorted,
+    scope,
+    journalHasCashflow,
   )
-  return withJ[0]!
+  return attachJournalToTradesList([row], perTrade, depositDenoms)[0]!
 }
 
 async function resolveAccountIdForOpen(

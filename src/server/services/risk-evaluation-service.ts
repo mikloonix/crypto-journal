@@ -3,6 +3,7 @@ import { TradeStatus } from "@prisma/client"
 import { riskSettingsRepository } from "@/server/repositories/risk-settings-repository"
 import { tradesRepository } from "@/server/repositories/trades-repository"
 import { cashflowRepository } from "@/server/repositories/cashflow-repository"
+import { accountRepository } from "@/server/repositories/account-repository"
 import { buildJournalEquitySummary } from "@/server/trading/equity-timeline"
 import { buildJournalRiskPack } from "@/server/trading/attach-journal-risk"
 import type { TradeWithLegs } from "@/server/trading/journal-metrics"
@@ -41,7 +42,12 @@ export const riskEvaluationService = {
     const journalAccountId =
       parsed.data.accountId?.trim() || rs.activeAccountId || undefined
 
-    const scope = { journalAllAccounts, journalAccountId }
+    const legacyCashflowAccountId = await accountRepository.findDefaultAccountId(userId)
+    const scope = {
+      journalAllAccounts,
+      journalAccountId,
+      ...(legacyCashflowAccountId ? { legacyCashflowAccountId } : {}),
+    }
     const raw = journalAllAccounts
       ? await tradesRepository.findManyActiveWithLegs(userId)
       : await tradesRepository.findOpenTradesWithLegs(userId, journalAccountId)
@@ -54,6 +60,7 @@ export const riskEvaluationService = {
         userId,
         journalAllAccounts,
         journalAccountId,
+        legacyCashflowAccountId ?? undefined,
       )
     } catch {
       /* optional */

@@ -4,12 +4,27 @@ import { prisma } from "@/lib/prisma"
 function journalScopeWhere(
   journalAllAccounts: boolean,
   journalAccountId: string | undefined,
+  legacyCashflowAccountId?: string | undefined,
 ): Prisma.CashflowWhereInput {
   if (journalAllAccounts) return {}
   if (!journalAccountId) return {}
+
+  const depositWithdrawClause: Prisma.CashflowWhereInput =
+    legacyCashflowAccountId === journalAccountId
+      ? {
+          AND: [
+            { type: { in: [CashflowType.DEPOSIT, CashflowType.WITHDRAWAL] } },
+            { OR: [{ accountId: journalAccountId }, { accountId: null }] },
+          ],
+        }
+      : {
+          type: { in: [CashflowType.DEPOSIT, CashflowType.WITHDRAWAL] },
+          accountId: journalAccountId,
+        }
+
   return {
     OR: [
-      { type: { in: [CashflowType.DEPOSIT, CashflowType.WITHDRAWAL] }, accountId: journalAccountId },
+      depositWithdrawClause,
       {
         type: CashflowType.TRANSFER,
         OR: [{ fromAccountId: journalAccountId }, { toAccountId: journalAccountId }],
@@ -37,11 +52,12 @@ export const cashflowRepository = {
     userId: string,
     journalAllAccounts: boolean,
     journalAccountId: string | undefined,
+    legacyCashflowAccountId?: string | undefined,
   ) {
     return prisma.cashflow.findMany({
       where: {
         userId,
-        ...journalScopeWhere(journalAllAccounts, journalAccountId),
+        ...journalScopeWhere(journalAllAccounts, journalAccountId, legacyCashflowAccountId),
       },
       orderBy: { timestamp: "asc" },
     })
@@ -53,12 +69,13 @@ export const cashflowRepository = {
     endExclusiveUtc: Date,
     journalAllAccounts: boolean,
     journalAccountId: string | undefined,
+    legacyCashflowAccountId?: string | undefined,
   ) {
     return prisma.cashflow.findMany({
       where: {
         userId,
         timestamp: { gte: startUtc, lt: endExclusiveUtc },
-        ...journalScopeWhere(journalAllAccounts, journalAccountId),
+        ...journalScopeWhere(journalAllAccounts, journalAccountId, legacyCashflowAccountId),
       },
       orderBy: { timestamp: "asc" },
     })
@@ -69,12 +86,13 @@ export const cashflowRepository = {
     beforeUtc: Date,
     journalAllAccounts: boolean,
     journalAccountId: string | undefined,
+    legacyCashflowAccountId?: string | undefined,
   ) {
     return prisma.cashflow.findMany({
       where: {
         userId,
         timestamp: { lt: beforeUtc },
-        ...journalScopeWhere(journalAllAccounts, journalAccountId),
+        ...journalScopeWhere(journalAllAccounts, journalAccountId, legacyCashflowAccountId),
       },
       orderBy: { timestamp: "asc" },
     })
@@ -86,6 +104,7 @@ export const cashflowRepository = {
     journalAllAccounts: boolean,
     journalAccountId: string | undefined,
     range?: { fromUtc?: Date; toUtc?: Date },
+    legacyCashflowAccountId?: string | undefined,
   ) {
     const time: Prisma.DateTimeFilter = {}
     if (range?.fromUtc) time.gte = range.fromUtc
@@ -95,7 +114,7 @@ export const cashflowRepository = {
       where: {
         userId,
         ...(hasTime ? { timestamp: time } : {}),
-        ...journalScopeWhere(journalAllAccounts, journalAccountId),
+        ...journalScopeWhere(journalAllAccounts, journalAccountId, legacyCashflowAccountId),
       },
       orderBy: { timestamp: "desc" },
     })

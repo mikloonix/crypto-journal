@@ -101,7 +101,7 @@ export function AppHeader() {
           )}
 
           {showNav && (
-            <nav className="hidden flex-wrap gap-4 text-sm text-[var(--text-secondary)] lg:flex">
+            <nav className="hidden flex-wrap gap-4 text-sm text-[var(--text-secondary)] md:flex">
               {nav.map(({ href, label }) => {
                 const active =
                   href === "/settings"
@@ -129,7 +129,7 @@ export function AppHeader() {
           <div className="flex shrink-0 items-center gap-2 md:gap-3">
             <button
               type="button"
-              className="inline-flex rounded border border-[var(--border)] p-2 text-[var(--text-primary)] lg:hidden"
+              className="inline-flex rounded border border-[var(--border)] p-2 text-[var(--text-primary)] md:hidden"
               aria-expanded={mobileOpen}
               aria-label={mobileOpen ? "Закрыть меню" : "Открыть меню"}
               onClick={() => setMobileOpen((o) => !o)}
@@ -154,7 +154,7 @@ export function AppHeader() {
       </div>
 
       {showNav && mobileOpen && (
-        <div className="border-t border-[var(--border)] bg-[var(--surface)] px-4 py-3 lg:hidden">
+        <div className="border-t border-[var(--border)] bg-[var(--surface)] px-4 py-3 md:hidden">
           <nav className="flex flex-col gap-2 text-sm">
             {nav.map(({ href, label }) => {
               const active =

@@ -27,7 +27,7 @@ import {
   capitalUsdtBeforeExclusive,
   maxDrawdownFromBalances,
 } from "@/server/trading/equity-timeline"
-import { netCashflowPortfolioUsdt } from "@/server/trading/cashflow-usdt"
+import { netCashflowPortfolioUsdt, type JournalEquityScope } from "@/server/trading/cashflow-usdt"
 import { JOURNAL_INITIAL_DEPOSIT_USDT } from "@/server/trading/equity-constants"
 
 function toLegs(t: TradeWithLegs): TradeWithLegs {
@@ -97,6 +97,8 @@ export type BuildAnalyticsInput = {
   journalHasCashflow: boolean
   /** Начало периода (UTC), для capital0. */
   periodStartUtc: Date
+  /** DEP/WITH без accountId — привязка к дефолтному счёту (скоуп журнала). */
+  legacyCashflowAccountId?: string | null
 }
 
 export function buildAnalyticsSnapshot(input: BuildAnalyticsInput): AnalyticsSnapshotDto {
@@ -115,11 +117,13 @@ export function buildAnalyticsSnapshot(input: BuildAnalyticsInput): AnalyticsSna
     cashflowsInPeriod,
     journalHasCashflow,
     periodStartUtc,
+    legacyCashflowAccountId,
   } = input
 
-  const scope = {
+  const scope: JournalEquityScope = {
     journalAllAccounts,
     journalAccountId: accountId ?? undefined,
+    ...(legacyCashflowAccountId ? { legacyCashflowAccountId } : {}),
   }
   const capital0Raw = capitalUsdtBeforeExclusive(
     periodStartUtc,

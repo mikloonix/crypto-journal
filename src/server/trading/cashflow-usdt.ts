@@ -4,6 +4,11 @@ export type JournalEquityScope = {
   journalAllAccounts: boolean
   /** Активный счёт журнала; при `journalAllAccounts` игнорируется. */
   journalAccountId: string | undefined
+  /**
+   * DEP/WITH с `accountId = null` учитываются в equity только если это совпадает
+   * с дефолтным счётом пользователя и журнал смотрит именно его (см. репозиторий cashflow).
+   */
+  legacyCashflowAccountId?: string | undefined
 }
 
 function isUsdtCurrency(currency: string): boolean {
@@ -43,19 +48,26 @@ export function cashflowPortfolioDeltaUsdt(cf: Cashflow, scope: JournalEquitySco
   const feeU = cashflowFeeUsdt(cf)
   if (!Number.isFinite(body) || !Number.isFinite(feeU)) return NaN
 
-  const { journalAllAccounts, journalAccountId } = scope
+  const { journalAllAccounts, journalAccountId, legacyCashflowAccountId } = scope
+
+  const depositWithdrawMatchesSingleAccount =
+    journalAccountId != null &&
+    (cf.accountId === journalAccountId ||
+      (cf.accountId == null &&
+        legacyCashflowAccountId != null &&
+        legacyCashflowAccountId === journalAccountId))
 
   if (cf.type === CashflowType.DEPOSIT) {
     const net = body - feeU
     if (journalAllAccounts) return net
-    if (cf.accountId === journalAccountId) return net
+    if (depositWithdrawMatchesSingleAccount) return net
     return 0
   }
 
   if (cf.type === CashflowType.WITHDRAWAL) {
     const out = body + feeU
     if (journalAllAccounts) return -out
-    if (cf.accountId === journalAccountId) return -out
+    if (depositWithdrawMatchesSingleAccount) return -out
     return 0
   }
 

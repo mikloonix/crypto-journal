@@ -89,7 +89,7 @@ export function TradeOpenForm({
   const feeHintTitle = `Комиссия: номинал (цена × маржа) × bps / 10 000. Сейчас ≈ ${formatDecimal(suggestedEntryFee)} ${feeQuote} при выбранном Maker/Taker. Пустое поле ниже — авто.`
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6 items-end">
+    <div className="grid grid-cols-1 gap-3 mb-6 items-end sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
       <div>
         <label className="text-sm text-gray-400">Символ</label>
         <input

@@ -38,10 +38,12 @@ function parseTimestamp(iso: string): Date | null {
 function journalScopeFromSettings(
   journalAllAccounts: boolean,
   activeAccountId: string | null | undefined,
+  legacyCashflowAccountId: string | null | undefined,
 ): JournalEquityScope {
   return {
     journalAllAccounts,
     journalAccountId: activeAccountId ?? undefined,
+    ...(legacyCashflowAccountId ? { legacyCashflowAccountId } : {}),
   }
 }
 
@@ -55,7 +57,12 @@ export const cashflowService = {
       toIso?: string | null
     },
   ): Promise<CashflowListResponseDto> {
-    const scope = journalScopeFromSettings(query.journalAllAccounts, query.journalAccountId)
+    const legacyCashflowAccountId = await accountRepository.findDefaultAccountId(userId)
+    const scope = journalScopeFromSettings(
+      query.journalAllAccounts,
+      query.journalAccountId,
+      legacyCashflowAccountId,
+    )
     const fromUtc = query.fromIso ? new Date(query.fromIso) : undefined
     const toUtc = query.toIso ? new Date(query.toIso) : undefined
     const range =
@@ -68,6 +75,7 @@ export const cashflowService = {
       query.journalAllAccounts,
       query.journalAccountId,
       range,
+      legacyCashflowAccountId ?? undefined,
     )
 
     const inPeriod = range
@@ -87,6 +95,7 @@ export const cashflowService = {
       userId,
       query.journalAllAccounts,
       query.journalAccountId,
+      legacyCashflowAccountId ?? undefined,
     )
     const equityTradesRaw = await tradesRepository.findClosedWithLegsForJournalScope(
       userId,

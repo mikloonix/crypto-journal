@@ -2,6 +2,7 @@ import type { RiskSettingsBalanceSyncDto, RiskSettingsDto } from "@/contracts/ri
 import { cashflowRepository } from "@/server/repositories/cashflow-repository"
 import { riskSettingsRepository } from "@/server/repositories/risk-settings-repository"
 import { tradesRepository } from "@/server/repositories/trades-repository"
+import { accountRepository } from "@/server/repositories/account-repository"
 import { buildJournalEquitySummary } from "@/server/trading/equity-timeline"
 import type { TradeWithLegs } from "@/server/trading/journal-metrics"
 import { riskSettingsPatchSchema } from "@/server/validation/risk-settings"
@@ -56,10 +57,13 @@ export const riskSettingsService = {
     const journalAllAccounts = rs.journalAllAccounts ?? false
     const journalAccountId = rs.activeAccountId ?? undefined
 
+    const legacyCashflowAccountId = await accountRepository.findDefaultAccountId(userId)
+
     const cashflows = await cashflowRepository.listForJournalScope(
       userId,
       journalAllAccounts,
       journalAccountId,
+      legacyCashflowAccountId ?? undefined,
     )
     const equityTradesRaw = await tradesRepository.findClosedWithLegsForJournalScope(
       userId,
@@ -73,6 +77,7 @@ export const riskSettingsService = {
     const summary = buildJournalEquitySummary(equityTrades, cashflows, {
       journalAllAccounts,
       journalAccountId,
+      ...(legacyCashflowAccountId ? { legacyCashflowAccountId } : {}),
     }, { openCount })
 
     return {

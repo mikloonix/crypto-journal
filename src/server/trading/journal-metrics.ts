@@ -19,6 +19,16 @@ export { JOURNAL_INITIAL_DEPOSIT_USDT } from "@/server/trading/equity-constants"
 
 export type TradeWithLegs = Trade & { entries: Entry[]; exits: Exit[] }
 
+/** Знаменатель для ROI к «депозиту» на момент события (equity журнала до PnL этой сделки/выхода). */
+export type DepositRoiDenoms = {
+  tradeById: Map<string, number>
+  exitByKey: Map<string, number>
+}
+
+function exitDenomKey(tradeId: string, exitId: string): string {
+  return `${tradeId}:${exitId}`
+}
+
 export type ExitWithLegJournal = Exit & { legJournal: ExitLegJournalDto }
 
 export type TradeWithJournal = Trade & {
@@ -30,7 +40,7 @@ export type TradeWithJournal = Trade & {
 
 export function buildTradeJournalMetrics(
   t: TradeWithLegs,
-  depositUsdt?: number,
+  equityBeforeCloseUsdt?: number,
 ): TradeJournalMetricsDto {
   const { entryVolume, exitVolume, remainingVolume } = calculateVolumes(t)
   const maxLeverage = tradeLeverageFromEntries(t.entries)
@@ -65,8 +75,12 @@ export function buildTradeJournalMetrics(
   }
 
   let depositRoiPct: number | null = null
-  if (depositUsdt != null && depositUsdt > 0 && displayPnl != null) {
-    depositRoiPct = (displayPnl / depositUsdt) * 100
+  if (
+    equityBeforeCloseUsdt != null &&
+    equityBeforeCloseUsdt > 1e-9 &&
+    displayPnl != null
+  ) {
+    depositRoiPct = (displayPnl / equityBeforeCloseUsdt) * 100
   }
 
   let durationMs: number | null = null
@@ -94,25 +108,32 @@ export function buildTradeJournalMetrics(
 export function buildExitLegJournal(
   t: TradeWithLegs,
   exit: Exit,
-  depositUsdt?: number,
+  equityBeforeExitUsdt?: number,
 ): ExitLegJournalDto {
   const leg = pnlRoiForExitLeg(t.direction, t.entries, exit)
   const depositRoiPct =
-    depositUsdt != null && depositUsdt > 0 ? (leg.pnl / depositUsdt) * 100 : 0
+    equityBeforeExitUsdt != null && equityBeforeExitUsdt > 1e-9
+      ? (leg.pnl / equityBeforeExitUsdt) * 100
+      : 0
   return { ...leg, depositRoiPct }
 }
 
 export function attachJournalToTradesList(
   trades: TradeWithLegs[],
   riskById?: Map<string, TradeRiskDto>,
-  depositUsdt?: number,
+  depositDenoms?: DepositRoiDenoms,
 ): TradeWithJournal[] {
   return trades.map((t) => {
-    const journal = buildTradeJournalMetrics(t, depositUsdt)
+    const equityBeforeTrade = depositDenoms?.tradeById.get(t.id)
+    const journal = buildTradeJournalMetrics(t, equityBeforeTrade)
     const risk = riskById?.get(t.id) ?? defaultTradeRisk()
     const exits: ExitWithLegJournal[] = t.exits.map((ex) => ({
       ...ex,
-      legJournal: buildExitLegJournal(t, ex, depositUsdt),
+      legJournal: buildExitLegJournal(
+        t,
+        ex,
+        depositDenoms?.exitByKey.get(exitDenomKey(t.id, ex.id)),
+      ),
     }))
     return { ...t, entries: t.entries, exits, journal, risk }
   })

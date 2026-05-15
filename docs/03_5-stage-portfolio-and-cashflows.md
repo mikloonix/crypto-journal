@@ -64,3 +64,9 @@
 - **API:** `GET|POST /api/cashflows`, `PATCH|DELETE /api/cashflows/[id]`; ответы в envelope проекта.
 - **UI:** `/portfolio` — таблица, период, форма; дашборд/журнал/аналитика используют тот же скоуп счёта, что и журнал (`journalAllAccounts` / `activeAccountId`).
 - **Миграции:** `20260515100000_stage35_cashflows`. На существующей БД без `_prisma_migrations` — baseline, см. `04-stage-risk-management.md` (раздел Prisma).
+
+### Legacy: DEP/WITH без `accountId`
+
+- В БД поле `Cashflow.accountId` может быть `null` у старых строк. API создания DEP/WITH по-прежнему **требует** `accountId`.
+- При журнале **одного счёта** такие строки учитываются в equity **только если** это счёт совпадает с **дефолтным** пользователя (`Account`: `isDefault` или первый по списку — `findDefaultAccountId`).
+- Реализация: `JournalEquityScope.legacyCashflowAccountId`, фильтр выборки в `cashflow-repository.ts`, дельта в `cashflowPortfolioDeltaUsdt` (`cashflow-usdt.ts`); проброс скоупа в журнал, дашборд, аналитику, портфель, risk evaluate / sync-balance.

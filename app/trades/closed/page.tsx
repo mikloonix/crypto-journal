@@ -405,7 +405,12 @@ export default function ClosedTradesPage() {
                   <th className="py-2 pr-2">Выход (ср.)</th>
                   <th className="py-2 pr-2">PnL</th>
                   <th className="py-2 pr-2">ROI</th>
-                  <th className="py-2 pr-2">ROI деп.</th>
+                  <th
+                    className="py-2 pr-2"
+                    title="PnL к equity журнала на момент закрытия (до этой сделки)"
+                  >
+                    ROI деп.
+                  </th>
                   <th className="py-2 pr-2">Комис.</th>
                   <th className="py-2 pr-2">Фанд.</th>
                   <th className="py-2 pr-2">Длит.</th>
@@ -687,7 +692,12 @@ export default function ClosedTradesPage() {
                 <th className="py-2 pr-2">Фандинг</th>
                 <th className="py-2 pr-2">PnL</th>
                 <th className="py-2 pr-2">ROI</th>
-                <th className="py-2 pr-2">ROI деп.</th>
+                <th
+                  className="py-2 pr-2"
+                  title="PnL к equity журнала на момент выхода (до этой ноги)"
+                >
+                  ROI деп.
+                </th>
                 <th className="py-2 pr-2">Стратегия</th>
                 <th className="py-2 pr-2">Эмоция вход</th>
                 <th className="py-2 pr-2">Эмоция выход</th>

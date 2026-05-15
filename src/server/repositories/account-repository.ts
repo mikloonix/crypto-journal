@@ -142,4 +142,14 @@ export const accountRepository = {
       return { ok: true as const }
     })
   },
+
+  /** Для DEP/WITH без accountId в cashflow — атрибуция к equity дефолтного счёта. */
+  async findDefaultAccountId(userId: string): Promise<string | null> {
+    const row = await prisma.account.findFirst({
+      where: { userId },
+      orderBy: [{ isDefault: "desc" }, { name: "asc" }],
+      select: { id: true },
+    })
+    return row?.id ?? null
+  },
 }

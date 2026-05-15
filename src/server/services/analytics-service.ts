@@ -7,6 +7,7 @@ import type { AnalyticsSnapshotDto } from "@/contracts/analytics"
 import { cashflowRepository } from "@/server/repositories/cashflow-repository"
 import { riskSettingsRepository } from "@/server/repositories/risk-settings-repository"
 import { tradesRepository } from "@/server/repositories/trades-repository"
+import { accountRepository } from "@/server/repositories/account-repository"
 import type { TradeWithLegs } from "@/server/trading/journal-metrics"
 import { formatAnalyticsSnapshotCsv } from "@/server/analytics-csv"
 
@@ -87,7 +88,7 @@ export const analyticsService = {
     const symbolFilter = query.symbol?.trim() || null
     const strategyFilter = query.strategy?.trim() || null
 
-    const [before, period] = await Promise.all([
+    const [before, period, legacyCashflowAccountId] = await Promise.all([
       tradesRepository.findClosedTradesClosedBefore(
         userId,
         start,
@@ -106,6 +107,7 @@ export const analyticsService = {
           marketType: marketTypeFilter,
         },
       ),
+      accountRepository.findDefaultAccountId(userId),
     ])
 
     let cfAll: Awaited<ReturnType<typeof cashflowRepository.listForJournalScope>> = []
@@ -114,6 +116,7 @@ export const analyticsService = {
         userId,
         journalAllAccounts,
         journalAccountId,
+        legacyCashflowAccountId ?? undefined,
       )
     } catch (err) {
       console.error("cashflow list skipped (analytics without portfolio):", err)
@@ -142,6 +145,7 @@ export const analyticsService = {
       cashflowsInPeriod,
       journalHasCashflow,
       periodStartUtc: start,
+      legacyCashflowAccountId,
     })
 
     return { ok: true, data }

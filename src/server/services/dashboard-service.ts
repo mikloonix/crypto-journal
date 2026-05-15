@@ -15,6 +15,7 @@ import type {
   DashboardDayStatsDto,
 } from "@/contracts/dashboard"
 import { riskSettingsRepository } from "@/server/repositories/risk-settings-repository"
+import { accountRepository } from "@/server/repositories/account-repository"
 import { cashflowRepository } from "@/server/repositories/cashflow-repository"
 import { tradesRepository } from "@/server/repositories/trades-repository"
 import { buildTradeJournalMetrics, type TradeWithLegs } from "@/server/trading/journal-metrics"
@@ -61,10 +62,17 @@ export const dashboardService = {
       pnlUsdt += pnlRoiForExitLeg(t.direction, t.entries, ex).pnl
     }
 
-    const rs = await riskSettingsRepository.upsertDefaults(userId)
+    const [rs, legacyCashflowAccountId] = await Promise.all([
+      riskSettingsRepository.upsertDefaults(userId),
+      accountRepository.findDefaultAccountId(userId),
+    ])
     const journalAllAccounts = accountId != null ? false : (rs.journalAllAccounts ?? false)
     const journalAccountId = accountId ?? rs.activeAccountId ?? undefined
-    const scope = { journalAllAccounts, journalAccountId }
+    const scope = {
+      journalAllAccounts,
+      journalAccountId,
+      ...(legacyCashflowAccountId ? { legacyCashflowAccountId } : {}),
+    }
 
     let cashflows: Awaited<ReturnType<typeof cashflowRepository.listForJournalScope>> = []
     try {
@@ -72,6 +80,7 @@ export const dashboardService = {
         userId,
         journalAllAccounts,
         journalAccountId,
+        legacyCashflowAccountId ?? undefined,
       )
     } catch {
       /* journal without cashflow table */
