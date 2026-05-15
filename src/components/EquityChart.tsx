@@ -17,6 +17,7 @@ export default function EquityChart({ equityCurve }: { equityCurve: EquityCurveP
     balance: p.balance,
     pnl: p.pnl,
     roi: p.roi,
+    stepKind: p.event === "cashflow" ? "Ввод/вывод" : "Сделка",
   }))
 
   return (
@@ -32,7 +33,10 @@ export default function EquityChart({ equityCurve }: { equityCurve: EquityCurveP
               formatInQuote(Number(value), "USDT"),
               "Баланс",
             ]}
-            labelFormatter={(label) => `Трейд ${label}`}
+            labelFormatter={(label, payload) => {
+              const kind = (payload?.[0]?.payload as { stepKind?: string } | undefined)?.stepKind
+              return kind ? `${kind} · шаг ${label}` : `Шаг ${label}`
+            }}
           />
           <Line type="monotone" dataKey="balance" stroke="#4ade80" />
         </LineChart>

@@ -14,6 +14,9 @@ function analyticsRouteErrorMessage(e: unknown): string {
   if (/Unknown argument [`']displayTimeZone[`']/i.test(msg)) {
     return "Устарел Prisma Client: остановите dev-сервер, выполните npx prisma generate и запустите снова."
   }
+  if (/Cannot read properties of undefined \(reading ['"]findMany['"]\)/i.test(msg)) {
+    return "Устарел Prisma Client (нет модели Cashflow): остановите все процессы Node, выполните npx prisma generate и перезапустите dev-сервер."
+  }
   return `Ошибка аналитики: ${msg}`
 }
 

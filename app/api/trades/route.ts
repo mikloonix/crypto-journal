@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server"
 import { getAuthenticatedUserId } from "@/lib/auth-user"
 import { jsonErr, jsonOk } from "@/server/http/json-response"
+import { handleRouteError } from "@/server/http/handle-route-error"
 import { tradesService } from "@/server/services/trades-service"
 import { parseJournalListQuery } from "@/server/trades/journal-list-query"
 
@@ -21,8 +22,7 @@ export async function GET(req: NextRequest) {
     const data = await tradesService.listJournal(userId, parsed)
     return jsonOk(data)
   } catch (e) {
-    console.error(e)
-    return jsonErr("GET error", 500)
+    return handleRouteError(e, "GET trades error")
   }
 }
 
@@ -40,8 +40,6 @@ export async function POST(req: NextRequest) {
     }
     return jsonOk({ trade: result.trade })
   } catch (e) {
-    console.error(e)
-    const msg = e instanceof Error ? e.message : "POST error"
-    return jsonErr(msg, 500)
+    return handleRouteError(e, "POST trades error")
   }
 }

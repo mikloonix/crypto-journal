@@ -2,12 +2,11 @@
  * Агрегаты аналитики (этап 3). Единая точка расчётов; UI не дублирует.
  */
 
-import { TradeStatus } from "@prisma/client"
+import { TradeStatus, type Cashflow } from "@prisma/client"
 import { formatInTimeZone } from "date-fns-tz"
 import type {
   AnalyticsDayPnlDto,
   AnalyticsEmotionSliceDto,
-  AnalyticsEquityPointDto,
   AnalyticsHistogramBinDto,
   AnalyticsHourSliceDto,
   AnalyticsMarketDirectionSliceDto,
@@ -18,12 +17,17 @@ import type {
   AnalyticsWeekdaySliceDto,
   AnalyticsWinLossDto,
 } from "@/contracts/analytics"
-import { calculateTradePnL } from "@/lib/risk-manager"
+import { calculateTradePnL } from "@/server/trading/trade-pnl"
 import {
   buildTradeJournalMetrics,
-  JOURNAL_INITIAL_DEPOSIT_USDT,
   type TradeWithLegs,
 } from "@/server/trading/journal-metrics"
+import {
+  buildAnalyticsEquityCurve,
+  capitalUsdtBeforeExclusive,
+  maxDrawdownFromBalances,
+} from "@/server/trading/equity-timeline"
+import { JOURNAL_INITIAL_DEPOSIT_USDT } from "@/server/trading/equity-constants"
 
 function toLegs(t: TradeWithLegs): TradeWithLegs {
   return {
@@ -34,16 +38,6 @@ function toLegs(t: TradeWithLegs): TradeWithLegs {
 
 export function pnlForClosedTrade(t: TradeWithLegs): number {
   return calculateTradePnL(toLegs(t))
-}
-
-export function capitalAtPeriodStartUsdt(
-  tradesClosedBeforeStart: TradeWithLegs[],
-): number {
-  let s = JOURNAL_INITIAL_DEPOSIT_USDT
-  for (const t of tradesClosedBeforeStart) {
-    s += pnlForClosedTrade(t)
-  }
-  return s
 }
 
 const HIST_BINS = 12
@@ -95,6 +89,13 @@ export type BuildAnalyticsInput = {
   marketTypeFilter: string | null
   tradesClosedStrictlyBeforeStart: TradeWithLegs[]
   tradesClosedInPeriod: TradeWithLegs[]
+  /** Cashflow до начала периода (тот же скоуп журнала). */
+  cashflowsStrictlyBeforeStart: Cashflow[]
+  cashflowsInPeriod: Cashflow[]
+  /** Есть ли у пользователя хотя бы одна cashflow-запись в скоупе журнала. */
+  journalHasCashflow: boolean
+  /** Начало периода (UTC), для capital0. */
+  periodStartUtc: Date
 }
 
 export function buildAnalyticsSnapshot(input: BuildAnalyticsInput): AnalyticsSnapshotDto {
@@ -109,9 +110,24 @@ export function buildAnalyticsSnapshot(input: BuildAnalyticsInput): AnalyticsSna
     marketTypeFilter,
     tradesClosedStrictlyBeforeStart,
     tradesClosedInPeriod,
+    cashflowsStrictlyBeforeStart,
+    cashflowsInPeriod,
+    journalHasCashflow,
+    periodStartUtc,
   } = input
 
-  const capital0 = capitalAtPeriodStartUsdt(tradesClosedStrictlyBeforeStart)
+  const scope = {
+    journalAllAccounts,
+    journalAccountId: accountId ?? undefined,
+  }
+  const capital0Raw = capitalUsdtBeforeExclusive(
+    periodStartUtc,
+    tradesClosedStrictlyBeforeStart,
+    cashflowsStrictlyBeforeStart,
+    scope,
+    journalHasCashflow,
+  )
+  const capital0 = Number.isFinite(capital0Raw) ? capital0Raw : JOURNAL_INITIAL_DEPOSIT_USDT
 
   const period = tradesClosedInPeriod
     .filter((t) => t.status === TradeStatus.CLOSED && t.closedAt != null)
@@ -176,27 +192,16 @@ export function buildAnalyticsSnapshot(input: BuildAnalyticsInput): AnalyticsSna
       ? winRateDec * avgWin + lossRateDec * avgLoss
       : null
 
-  const equityCurve: AnalyticsEquityPointDto[] = []
-  let cum = 0
-  let peak = capital0
-  let maxDdUsd = 0
-  let balance = capital0
-  for (let i = 0; i < period.length; i++) {
-    const t = period[i]!
-    const p = pnls[i]!
-    cum += p
-    balance = capital0 + cum
-    if (balance > peak) peak = balance
-    const dd = peak - balance
-    if (dd > maxDdUsd) maxDdUsd = dd
-    equityCurve.push({
-      index: i + 1,
-      closedAt: new Date(t.closedAt!).toISOString(),
-      pnlUsdt: p,
-      cumulativePnlUsdt: cum,
-      balanceUsdt: balance,
-    })
-  }
+  const equityCurve = buildAnalyticsEquityCurve(
+    capital0,
+    tradesClosedInPeriod,
+    cashflowsInPeriod,
+    scope,
+  )
+  const { maxDdUsd, peak } = maxDrawdownFromBalances(
+    capital0,
+    equityCurve.map((p) => p.balanceUsdt),
+  )
 
   const maxDrawdownUsdt = maxDdUsd
   const maxDrawdownPercent = peak > 1e-9 ? (maxDdUsd / peak) * 100 : null

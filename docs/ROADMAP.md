@@ -18,7 +18,7 @@
 | 2.5 ✅ | `02_5-stage-app-shell-and-settings.md` | app shell, справочники, выбор `Account`, `/settings/accounts` + `/settings/catalogs` |
 | 2.6 ✅ (MVP) | `02_6-stage-dashboard-widgets.md` | день (USDT), усреднение (ручные цены/стоп); ROI/цель/фиат — см. док |
 | 3 🔄 | `03-stage-analytics-and-visuals.md` | аналитика + графики; TZ из настроек; вкладки графиков без гистограммы «Распределение» в UI (см. док) |
-| 3.5 | `03_5-stage-portfolio-and-cashflows.md` | портфель, ввод/вывод, equity от депозитов |
+| 3.5 ✅ | `03_5-stage-portfolio-and-cashflows.md` | портфель, ввод/вывод, equity от депозитов |
 | 4 | `04-stage-risk-management.md` | риск-менеджмент, правила, подсветка |
 | 4.1 | `04_1-stage-cross-margin-risk.md` | кросс-маржа, совокупный риск, what-if ликвидации |
 | 4.5 | `04_5-stage-forecast.md` | прогноз, цель по депозиту/дню, `/forecast` |
@@ -26,6 +26,7 @@
 | 5.5 | `05_5-stage-testing.md` | unit/интеграционные тесты, CI |
 | 6 | `06-stage-production-readiness.md` | прод: деплой, бэкапы, мониторинг |
 | 7 | `07-stage-technical-enhancements.md` | PWA, OpenAPI, shared Zod-схемы |
+| 7.1 | `07_1-stage-architecture-and-quality-hardening.md` | слои UI/API, Zod на мутации, Prisma errors, гонки загрузки, лимиты аналитики, минимум тестов, черновик формы |
 
 ## Вкладки приложения (целевой UX)
 

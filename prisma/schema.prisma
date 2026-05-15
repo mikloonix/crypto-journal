@@ -32,6 +32,12 @@ enum AccountSource {
   BINGX
 }
 
+enum CashflowType {
+  DEPOSIT
+  WITHDRAWAL
+  TRANSFER
+}
+
 model User {
   id            String         @id @default(cuid())
   email         String         @unique
@@ -44,6 +50,7 @@ model User {
   accounts      Account[]
   strategies    Strategy[]
   emotions      Emotion[]
+  cashflows     Cashflow[]
 
   @@map("users")
 }
@@ -63,9 +70,46 @@ model Account {
   trades Trade[]
 
   riskSettingsActive RiskSettings[] @relation("RiskSettingsActiveAccount")
+  cashflowsPrimary   Cashflow[]      @relation("CashflowPrimaryAccount")
+  cashflowsFrom      Cashflow[]      @relation("CashflowFromAccount")
+  cashflowsTo        Cashflow[]      @relation("CashflowToAccount")
 
   @@index([userId])
   @@map("accounts")
+}
+
+/// Пополнение / вывод / перевод между счетами (этап 3.5).
+model Cashflow {
+  id     String       @id @default(cuid())
+  userId String
+  type   CashflowType
+  /// Для DEPOSIT (приход) и WITHDRAWAL (расход).
+  accountId String?
+  /// Для TRANSFER: списание и зачисление.
+  fromAccountId String?
+  toAccountId   String?
+
+  amount   Float
+  currency String
+  /// USDT за 1 единицу `currency`. Для USDT не задан — трактуется как 1.
+  fxRate   Float?
+  fee      Float?
+  timestamp DateTime
+  note     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account Account? @relation("CashflowPrimaryAccount", fields: [accountId], references: [id], onDelete: Cascade)
+  fromAccount Account? @relation("CashflowFromAccount", fields: [fromAccountId], references: [id], onDelete: Cascade)
+  toAccount   Account? @relation("CashflowToAccount", fields: [toAccountId], references: [id], onDelete: Cascade)
+
+  @@index([userId, timestamp])
+  @@index([userId, accountId])
+  @@index([userId, fromAccountId])
+  @@index([userId, toAccountId])
+  @@map("cashflows")
 }
 
 model Strategy {

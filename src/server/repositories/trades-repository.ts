@@ -101,6 +101,25 @@ export const tradesRepository = {
     })
   },
 
+  /** Все закрытые сделки для equity / summary (скоуп журнала), без фильтров таблицы. */
+  findClosedWithLegsForJournalScope(
+    userId: string,
+    journalAllAccounts: boolean,
+    journalAccountId: string | undefined,
+  ) {
+    const scope = journalScopeWhere(journalAllAccounts, journalAccountId)
+    return prisma.trade.findMany({
+      where: {
+        ...whereActiveTrades(userId),
+        ...scope,
+        status: TradeStatus.CLOSED,
+        closedAt: { not: null },
+      },
+      orderBy: { closedAt: "asc" },
+      include: tradeIncludeActive,
+    })
+  },
+
   /** [closedAt start, closedAt end) — локальный день в UTC-инстантах с клиента. */
   findClosedTradesClosedAtHalfOpenRange(
     userId: string,

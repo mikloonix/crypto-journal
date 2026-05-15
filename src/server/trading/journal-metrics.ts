@@ -3,17 +3,11 @@ import {
   calculateTradePnL,
   calculateRealizedPnL,
   calculateVolumes,
-} from "@/lib/risk-manager"
+} from "@/server/trading/trade-pnl"
 import { pnlRoiForExitLeg } from "@/lib/exit-leg-pnl"
-import type {
-  EquityCurvePointDto,
-  ExitLegJournalDto,
-  JournalSummaryDto,
-  TradeJournalMetricsDto,
-} from "@/contracts/trades"
+import type { ExitLegJournalDto, TradeJournalMetricsDto } from "@/contracts/trades"
 
-/** Единая константа для equity/карточек журнала до появления портфеля (этап 3.5). */
-export const JOURNAL_INITIAL_DEPOSIT_USDT = 1000
+export { JOURNAL_INITIAL_DEPOSIT_USDT } from "@/server/trading/equity-constants"
 
 export type TradeWithLegs = Trade & { entries: Entry[]; exits: Exit[] }
 
@@ -76,44 +70,6 @@ export function buildTradeJournalMetrics(t: TradeWithLegs): TradeJournalMetricsD
 
 export function buildExitLegJournal(t: TradeWithLegs, exit: Exit): ExitLegJournalDto {
   return pnlRoiForExitLeg(t.direction, t.entries, exit)
-}
-
-export function buildJournalSummary(trades: TradeWithLegs[]): JournalSummaryDto {
-  const initial = JOURNAL_INITIAL_DEPOSIT_USDT
-  const closed = trades.filter((t) => t.status === TradeStatus.CLOSED && t.closedAt != null)
-  let totalPnlClosed = 0
-  for (const t of closed) {
-    totalPnlClosed += calculateTradePnL(t)
-  }
-  const balance = initial + totalPnlClosed
-  const roiPercent = (totalPnlClosed / initial) * 100
-  const openCount = trades.filter((t) => t.status === TradeStatus.OPEN).length
-
-  const sorted = closed
-    .slice()
-    .sort((a, b) => new Date(a.closedAt!).getTime() - new Date(b.closedAt!).getTime())
-
-  let running = initial
-  const equityCurve: EquityCurvePointDto[] = sorted.map((t, i) => {
-    const pnl = calculateTradePnL(t)
-    running += pnl
-    const roi = ((running - initial) / initial) * 100
-    return {
-      tradeIndex: i + 1,
-      balance: running,
-      pnl,
-      roi,
-    }
-  })
-
-  return {
-    initialDepositUsdt: initial,
-    balanceEstimateUsdt: balance,
-    totalPnlClosedUsdt: totalPnlClosed,
-    roiPercent,
-    openCount,
-    equityCurve,
-  }
 }
 
 export function attachJournalToTradesList(trades: TradeWithLegs[]): TradeWithJournal[] {

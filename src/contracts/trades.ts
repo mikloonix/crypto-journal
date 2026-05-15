@@ -53,6 +53,7 @@ export type EquityCurvePointDto = {
   balance: number
   pnl: number
   roi: number
+  event?: "trade" | "cashflow"
 }
 
 export type JournalSummaryDto = {

@@ -259,6 +259,7 @@ export default function AnalyticsPage() {
 
   const load = useCallback(async () => {
     if (!authed || !accountReady) return
+    void journalScopeKey
     setLoadErr(null)
     const r = await getAnalytics(query)
     if (!r.ok) {

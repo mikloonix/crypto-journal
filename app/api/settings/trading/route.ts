@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server"
 import { getAuthenticatedUserId } from "@/lib/auth-user"
 import { jsonErr, jsonOk } from "@/server/http/json-response"
+import { handleRouteError } from "@/server/http/handle-route-error"
 import { tradingSettingsService } from "@/server/services/trading-settings-service"
 
 export async function GET(req: NextRequest) {
@@ -13,8 +14,7 @@ export async function GET(req: NextRequest) {
     const data = await tradingSettingsService.getTradingDefaults(userId)
     return jsonOk(data)
   } catch (e) {
-    console.error(e)
-    return jsonErr("GET error", 500)
+    return handleRouteError(e, "GET trading settings error")
   }
 }
 
@@ -32,14 +32,6 @@ export async function PATCH(req: NextRequest) {
     }
     return jsonOk(result.data)
   } catch (e) {
-    console.error(e)
-    const msg = e instanceof Error ? e.message : String(e)
-    if (/Unknown argument|display_time_zone|displayTimeZone|column.*does not exist/i.test(msg)) {
-      return jsonErr(
-        "Не удалось сохранить: схема БД без поля часового пояса. Выполните миграции Prisma (displayTimeZone).",
-        500,
-      )
-    }
-    return jsonErr(msg.length > 200 ? "PATCH error" : msg, 500)
+    return handleRouteError(e, "PATCH trading settings error")
   }
 }

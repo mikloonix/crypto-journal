@@ -4,6 +4,7 @@ import { isValidIanaTimeZone } from "@/lib/iana-time-zone"
 import { buildAnalyticsSnapshot } from "@/lib/analytics-metrics"
 import { zonedPeriodHalfOpenUtc, zonedRollingPeriodInclusiveYmd } from "@/lib/zoned-date-range"
 import type { AnalyticsSnapshotDto } from "@/contracts/analytics"
+import { cashflowRepository } from "@/server/repositories/cashflow-repository"
 import { riskSettingsRepository } from "@/server/repositories/risk-settings-repository"
 import { tradesRepository } from "@/server/repositories/trades-repository"
 import type { TradeWithLegs } from "@/server/trading/journal-metrics"
@@ -107,6 +108,25 @@ export const analyticsService = {
       ),
     ])
 
+    let cfAll: Awaited<ReturnType<typeof cashflowRepository.listForJournalScope>> = []
+    try {
+      cfAll = await cashflowRepository.listForJournalScope(
+        userId,
+        journalAllAccounts,
+        journalAccountId,
+      )
+    } catch (err) {
+      console.error("cashflow list skipped (analytics without portfolio):", err)
+    }
+
+    const tStart = start.getTime()
+    const tEnd = endExclusive.getTime()
+    const journalHasCashflow = cfAll.length > 0
+    const cashflowsStrictlyBeforeStart = cfAll.filter((c) => c.timestamp.getTime() < tStart)
+    const cashflowsInPeriod = cfAll.filter(
+      (c) => c.timestamp.getTime() >= tStart && c.timestamp.getTime() < tEnd,
+    )
+
     const data = buildAnalyticsSnapshot({
       timeZone,
       fromYmd,
@@ -118,6 +138,10 @@ export const analyticsService = {
       marketTypeFilter: marketTypeFilter ?? null,
       tradesClosedStrictlyBeforeStart: before as TradeWithLegs[],
       tradesClosedInPeriod: period as TradeWithLegs[],
+      cashflowsStrictlyBeforeStart,
+      cashflowsInPeriod,
+      journalHasCashflow,
+      periodStartUtc: start,
     })
 
     return { ok: true, data }

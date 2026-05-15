@@ -4,6 +4,8 @@ import { isValidIanaTimeZone } from "@/lib/iana-time-zone"
 import type { TradingDefaultsDto } from "@/contracts/trades"
 import { accountRepository } from "@/server/repositories/account-repository"
 import { riskSettingsRepository } from "@/server/repositories/risk-settings-repository"
+import { tradingSettingsPatchSchema } from "@/server/validation/trading-settings"
+import { zodErrorMessage } from "@/server/validation/zod-helpers"
 
 export const tradingSettingsService = {
   async getTradingDefaults(userId: string): Promise<TradingDefaultsDto> {
@@ -22,64 +24,28 @@ export const tradingSettingsService = {
 
   async patchTradingDefaults(
     userId: string,
-    body: Record<string, unknown>,
+    body: unknown,
   ): Promise<
     | { ok: true; data: TradingDefaultsDto }
     | { ok: false; error: string; status: number }
   > {
-    const defaultFeeUsdtRaw = body.defaultFeeUsdt
-    const defaultFeeUsdt =
-      defaultFeeUsdtRaw === null || defaultFeeUsdtRaw === undefined || defaultFeeUsdtRaw === ""
-        ? undefined
-        : Number(defaultFeeUsdtRaw)
-
-    const makerRaw = body.makerFeeBps
-    const takerRaw = body.takerFeeBps
-    const makerFeeBps =
-      makerRaw === null || makerRaw === undefined || makerRaw === "" ? undefined : Number(makerRaw)
-    const takerFeeBps =
-      takerRaw === null || takerRaw === undefined || takerRaw === "" ? undefined : Number(takerRaw)
-
-    const vipRaw = body.bingxVipTier
-    const vipTier =
-      vipRaw === null || vipRaw === undefined || vipRaw === "" ? undefined : Number(vipRaw)
-
-    const activeRaw = body.activeAccountId
-    let activeAccountId: string | null | undefined
-    if (activeRaw === null) {
-      activeAccountId = null
-    } else if (activeRaw !== undefined && activeRaw !== "") {
-      activeAccountId = String(activeRaw).trim()
+    const parsed = tradingSettingsPatchSchema.safeParse(body)
+    if (!parsed.success) {
+      return { ok: false, error: zodErrorMessage(parsed.error), status: 400 }
     }
+    const o = parsed.data
 
-    const journalAllRaw = body.journalAllAccounts
-    let journalAllAccounts: boolean | undefined
-    if (journalAllRaw === true || journalAllRaw === false) {
-      journalAllAccounts = journalAllRaw
-    } else if (journalAllRaw != null && journalAllRaw !== "") {
-      const s = String(journalAllRaw).toLowerCase()
-      if (s === "true" || s === "1") journalAllAccounts = true
-      if (s === "false" || s === "0") journalAllAccounts = false
-    }
+    const defaultFeeUsdt = o.defaultFeeUsdt ?? undefined
+    const makerFeeBps = o.makerFeeBps ?? undefined
+    const takerFeeBps = o.takerFeeBps ?? undefined
+    const vipTier = o.bingxVipTier ?? undefined
+    const activeAccountId = o.activeAccountId
+    const journalAllAccounts = o.journalAllAccounts
+    const displayTimeZone =
+      o.displayTimeZone != null && String(o.displayTimeZone).trim() !== ""
+        ? String(o.displayTimeZone).trim()
+        : undefined
 
-    const tzRaw = body.displayTimeZone
-    let displayTimeZone: string | undefined
-    if (tzRaw !== null && tzRaw !== undefined && String(tzRaw).trim() !== "") {
-      displayTimeZone = String(tzRaw).trim()
-    }
-
-    if (
-      defaultFeeUsdt !== undefined &&
-      (!Number.isFinite(defaultFeeUsdt) || defaultFeeUsdt < 0)
-    ) {
-      return { ok: false, error: "Invalid defaultFeeUsdt", status: 400 }
-    }
-    if (makerFeeBps !== undefined && (!Number.isFinite(makerFeeBps) || makerFeeBps < 0)) {
-      return { ok: false, error: "Invalid makerFeeBps", status: 400 }
-    }
-    if (takerFeeBps !== undefined && (!Number.isFinite(takerFeeBps) || takerFeeBps < 0)) {
-      return { ok: false, error: "Invalid takerFeeBps", status: 400 }
-    }
     if (
       vipTier !== undefined &&
       (!Number.isFinite(vipTier) || vipTier < 0 || vipTier > BINGX_VIP_MAX_TIER)

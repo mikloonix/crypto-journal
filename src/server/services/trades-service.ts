@@ -8,16 +8,17 @@ import {
 } from "@/lib/bingx-fees"
 import { sumEntryVolume, sumExitVolume } from "@/lib/trade-volumes"
 import { accountRepository } from "@/server/repositories/account-repository"
+import { cashflowRepository } from "@/server/repositories/cashflow-repository"
 import { tradesRepository } from "@/server/repositories/trades-repository"
 import { riskSettingsRepository } from "@/server/repositories/risk-settings-repository"
 import { exitRepository } from "@/server/repositories/exit-repository"
 import type { TradesJournalListDto } from "@/contracts/trades"
 import {
   attachJournalToTradesList,
-  buildJournalSummary,
   type TradeWithLegs,
   type TradeWithJournal,
 } from "@/server/trading/journal-metrics"
+import { buildJournalEquitySummary } from "@/server/trading/equity-timeline"
 import { serializeTradeListItem } from "@/server/trading/serialize-trade"
 import type { JournalListQueryForService } from "@/server/trades/journal-list-query"
 
@@ -31,8 +32,32 @@ function toTradeWithLegs(row: {
   }
 }
 
-function packJournalList(rows: TradeWithLegs[]): TradesJournalListDto {
-  const summary = buildJournalSummary(rows)
+async function packJournalList(rows: TradeWithLegs[], userId: string): Promise<TradesJournalListDto> {
+  const rs = await riskSettingsRepository.upsertDefaults(userId)
+  const journalAllAccounts = rs.journalAllAccounts ?? false
+  const journalAccountId = rs.activeAccountId ?? undefined
+  let cashflows: Awaited<ReturnType<typeof cashflowRepository.listForJournalScope>> = []
+  try {
+    cashflows = await cashflowRepository.listForJournalScope(
+      userId,
+      journalAllAccounts,
+      journalAccountId,
+    )
+  } catch (err) {
+    console.error("cashflow list skipped (journal still loads):", err)
+  }
+  const equityTradesRaw = await tradesRepository.findClosedWithLegsForJournalScope(
+    userId,
+    journalAllAccounts,
+    journalAccountId,
+  )
+  const equityTrades = equityTradesRaw.map((t) => toTradeWithLegs(t))
+  const summary = buildJournalEquitySummary(equityTrades, cashflows, {
+    journalAllAccounts,
+    journalAccountId,
+  }, {
+    openCount: rows.filter((t) => t.status === TradeStatus.OPEN).length,
+  })
   const withJ = attachJournalToTradesList(rows)
   return {
     trades: withJ.map(serializeTradeListItem),
@@ -80,7 +105,7 @@ export const tradesService = {
         ? await tradesRepository.findManyActiveWithLegs(userId)
         : await tradesRepository.findManyActiveWithLegsFiltered(userId, parsed.filters)
     const rows = raw.map((t) => toTradeWithLegs(t))
-    return packJournalList(rows)
+    return packJournalList(rows, userId)
   },
 
   async openTrade(
