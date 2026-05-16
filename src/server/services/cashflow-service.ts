@@ -97,7 +97,7 @@ export const cashflowService = {
       query.journalAccountId,
       legacyCashflowAccountId ?? undefined,
     )
-    const equityTradesRaw = await tradesRepository.findClosedWithLegsForJournalScope(
+    const equityTradesRaw = await tradesRepository.findTradesWithLegsForJournalEquity(
       userId,
       query.journalAllAccounts,
       query.journalAccountId,

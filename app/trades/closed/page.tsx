@@ -1,7 +1,7 @@
 "use client"
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react"
-import { useRouter } from "next/navigation"
+import { Fragment, Suspense, useEffect, useMemo, useRef, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import {
   endOfDay,
   endOfMonth,
@@ -25,7 +25,11 @@ import {
   type JournalGroupMode,
 } from "@/features/trades/journal-grouping"
 import { redirectOn401 } from "@/features/trades/session-expired"
-import { formatDecimal, formatInQuote, formatPercent } from "@/lib/format-amount"
+import {
+  formatDecimal,
+  formatDisplayPercent,
+  formatInQuote,
+} from "@/lib/format-amount"
 import { formatDurationMs } from "@/lib/format-duration"
 import { quoteCurrencyFromSymbol } from "@/lib/quote-currency"
 
@@ -79,7 +83,16 @@ function periodToRange(
 }
 
 export default function ClosedTradesPage() {
+  return (
+    <Suspense fallback={<div className="text-[var(--text-secondary)]">Загрузка…</div>}>
+      <ClosedTradesPageContent />
+    </Suspense>
+  )
+}
+
+function ClosedTradesPageContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const gate = useProtectedPageSession()
   const authed = gate === "authed"
   const {
@@ -154,6 +167,24 @@ export default function ClosedTradesPage() {
 
   const { trades, setTrades, refresh } = useTradesJournal(authed && accountReady, listQuery)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+
+  const highlightTradeId = searchParams.get("tradeId")?.trim() || null
+
+  useEffect(() => {
+    if (!highlightTradeId || trades.length === 0) return
+    if (!trades.some((t) => t.id === highlightTradeId)) return
+    setExpanded((prev) =>
+      prev[highlightTradeId] ? prev : { ...prev, [highlightTradeId]: true },
+    )
+    const id = highlightTradeId
+    const timer = window.setTimeout(() => {
+      document.getElementById(`closed-trade-row-${id}`)?.scrollIntoView({
+        block: "center",
+        behavior: "smooth",
+      })
+    }, 50)
+    return () => window.clearTimeout(timer)
+  }, [highlightTradeId, trades])
 
   const groupedTrades = useMemo(
     () => groupClosedTradesByPeriod(trades, groupMode),
@@ -390,6 +421,7 @@ export default function ClosedTradesPage() {
               expanded={expanded}
               setExpanded={setExpanded}
               onDeleteTrade={deleteTradeToTrash}
+              highlightTradeId={highlightTradeId}
             />
           </div>
           <div className="hidden overflow-x-auto md:block">
@@ -454,7 +486,7 @@ export default function ClosedTradesPage() {
                           }`}
                         >
                           ROI:{" "}
-                          {g.groupRoiPct != null ? `${formatPercent(g.groupRoiPct)}%` : "—"}
+                          {g.groupRoiPct != null ? `${formatDisplayPercent(g.groupRoiPct)}%` : "—"}
                         </td>
                         <td colSpan={10} className="py-2" />
                       </tr>
@@ -468,7 +500,14 @@ export default function ClosedTradesPage() {
 
                       return (
                         <Fragment key={t.id}>
-                          <tr className="border-b border-gray-900">
+                          <tr
+                            id={`closed-trade-row-${t.id}`}
+                            className={`border-b border-gray-900 ${
+                              highlightTradeId === t.id
+                                ? "ring-2 ring-inset ring-amber-500/50"
+                                : ""
+                            }`}
+                          >
                             <td className="py-2 pr-2">{t.symbol}</td>
                             <td className="py-2 pr-2">{t.marketType}</td>
                             <td
@@ -500,7 +539,7 @@ export default function ClosedTradesPage() {
                                 roi > 0 ? "text-green-400" : roi < 0 ? "text-red-400" : ""
                               }
                             >
-                              {formatPercent(roi)}%
+                              {formatDisplayPercent(roi)}%
                             </td>
                             <td
                               className={
@@ -511,7 +550,7 @@ export default function ClosedTradesPage() {
                                     : ""
                               }
                             >
-                              {depositRoi != null ? `${formatPercent(depositRoi)}%` : "—"}
+                              {depositRoi != null ? `${formatDisplayPercent(depositRoi)}%` : "—"}
                             </td>
                             <td className="py-2 pr-2">{formatInQuote(t.fee, q)}</td>
                             <td className="py-2 pr-2">{formatInQuote(t.funding, q)}</td>
@@ -736,7 +775,7 @@ export default function ClosedTradesPage() {
                         }`}
                       >
                         ROI:{" "}
-                        {g.groupRoiPct != null ? `${formatPercent(g.groupRoiPct)}%` : "—"}
+                        {g.groupRoiPct != null ? `${formatDisplayPercent(g.groupRoiPct)}%` : "—"}
                       </td>
                       <td colSpan={5} className="py-2" />
                     </tr>
@@ -785,7 +824,7 @@ export default function ClosedTradesPage() {
                             roiPct > 0 ? "text-green-400" : roiPct < 0 ? "text-red-400" : ""
                           }
                         >
-                          {formatPercent(roiPct)}%
+                          {formatDisplayPercent(roiPct)}%
                         </td>
                         <td
                           className={
@@ -796,7 +835,7 @@ export default function ClosedTradesPage() {
                                 : ""
                           }
                         >
-                          {formatPercent(depositRoiPct)}%
+                          {formatDisplayPercent(depositRoiPct)}%
                         </td>
                         <td className="max-w-[140px] truncate py-2 pr-2" title={t.strategy ?? ""}>
                           {t.strategy ?? "—"}

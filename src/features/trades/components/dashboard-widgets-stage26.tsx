@@ -11,8 +11,14 @@ import {
   getDashboardDayStats,
   postAveragingCompute,
 } from "@/features/trades/api"
-import { formatDecimal, formatInQuote, formatPercent } from "@/lib/format-amount"
+import {
+  formatDecimal,
+  formatDisplayPercent,
+  formatInQuote,
+  formatInQuoteDisplay,
+} from "@/lib/format-amount"
 import { zonedDayBoundsIsoForPreset } from "@/lib/zoned-date-range"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { redirectOn401 } from "@/features/trades/session-expired"
 
@@ -138,7 +144,7 @@ export function DashboardDayStripStage26({
                 stats.roiDayPercent >= 0 ? "text-green-400" : "text-red-400"
               }`}
             >
-              {formatPercent(stats.roiDayPercent)}%
+              {formatDisplayPercent(stats.roiDayPercent)}%
             </p>
           ) : (
             <p className="text-xl text-gray-400">—</p>
@@ -147,7 +153,7 @@ export function DashboardDayStripStage26({
             <p className="mt-1 text-gray-400 text-sm">Нет капитала на начало дня</p>
           ) : stats ? (
             <p className="mt-1 text-gray-400 text-sm">
-              База: {formatInQuote(stats.balanceAtDayStartUsdt, stats.displayCurrency)}
+              База: {formatInQuoteDisplay(stats.balanceAtDayStartUsdt, stats.displayCurrency)}
             </p>
           ) : null}
         </div>
@@ -165,8 +171,28 @@ export function DashboardDayStripStage26({
         </div>
 
         <div className="bg-[#111] p-4 rounded">
-          <p className="text-gray-400 text-sm">Цель дня</p>
-          <p className="text-sm text-gray-400">Вкладка «Прогноз» — этап 4.5</p>
+          <p className="text-gray-400 text-sm">Цель дня (прогноз)</p>
+          {loadErr ? (
+            <p className="text-sm text-[var(--accent-red)]">{loadErr}</p>
+          ) : stats?.forecastConfigured && stats?.derivativeDayTargetUsdt != null ? (
+            <p className="text-xl tabular-nums text-[var(--text-primary)]">
+              {formatInQuoteDisplay(stats.derivativeDayTargetUsdt, stats.displayCurrency)}
+            </p>
+          ) : (
+            <>
+              <p className="text-xl text-gray-400">—</p>
+              {stats?.forecastConfigured && stats?.derivativeDayTargetUsdt == null ? (
+                <p className="mt-1 text-xs text-gray-500">Цель депозита достигнута по equity</p>
+              ) : (
+                <Link
+                  href="/forecast"
+                  className="mt-1 inline-block text-xs text-[var(--accent-blue)] hover:underline"
+                >
+                  Настроить на вкладке «Прогноз»
+                </Link>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>

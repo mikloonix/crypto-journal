@@ -1,9 +1,11 @@
 /**
- * Агрегаты аналитики (этап 3). Единая точка расчётов; UI не дублирует.
+ * Агрегаты аналитики (этап 3). По выходам (сделкам), как дашборд; UI не дублирует.
  */
 
-import { TradeStatus, type Cashflow } from "@prisma/client"
+import { TradeStatus, type Cashflow, type Exit } from "@prisma/client"
 import { formatInTimeZone } from "date-fns-tz"
+import { pnlRoiForExitLeg } from "@/lib/exit-leg-pnl"
+import { zonedPeriodHalfOpenUtc } from "@/lib/zoned-date-range"
 import type {
   AnalyticsDayPnlDto,
   AnalyticsEmotionSliceDto,
@@ -17,14 +19,13 @@ import type {
   AnalyticsWeekdaySliceDto,
   AnalyticsWinLossDto,
 } from "@/contracts/analytics"
-import { calculateTradePnL } from "@/server/trading/trade-pnl"
 import {
   buildTradeJournalMetrics,
   type TradeWithLegs,
 } from "@/server/trading/journal-metrics"
 import {
-  buildAnalyticsEquityCurve,
-  capitalUsdtBeforeExclusive,
+  buildAnalyticsEquityCurveFromExits,
+  equityUsdtBeforeExitLeg,
   maxDrawdownFromBalances,
 } from "@/server/trading/equity-timeline"
 import { netCashflowPortfolioUsdt, type JournalEquityScope } from "@/server/trading/cashflow-usdt"
@@ -35,10 +36,6 @@ function toLegs(t: TradeWithLegs): TradeWithLegs {
     ...t,
     exits: t.exits.filter((e) => e.deletedAt == null),
   }
-}
-
-export function pnlForClosedTrade(t: TradeWithLegs): number {
-  return calculateTradePnL(toLegs(t))
 }
 
 const HIST_BINS = 12
@@ -79,6 +76,41 @@ function sharpeFromDailyPnls(daily: number[]): number | null {
   return mean / std
 }
 
+type AnalyticsExitEvent = {
+  trade: TradeWithLegs
+  exit: Exit
+  at: Date
+  pnl: number
+  roiLegPct: number | null
+}
+
+function collectExitEventsInPeriod(
+  trades: TradeWithLegs[],
+  startUtc: Date,
+  endExclusiveUtc: Date,
+): AnalyticsExitEvent[] {
+  const t0 = startUtc.getTime()
+  const t1 = endExclusiveUtc.getTime()
+  const events: AnalyticsExitEvent[] = []
+  for (const trade of trades) {
+    const t = toLegs(trade)
+    for (const exit of t.exits) {
+      if (exit.deletedAt != null) continue
+      const at = exit.timestamp
+      const ts = at.getTime()
+      if (ts < t0 || ts >= t1) continue
+      const leg = pnlRoiForExitLeg(t.direction, t.entries, exit)
+      events.push({ trade: t, exit, at, pnl: leg.pnl, roiLegPct: leg.roiPct })
+    }
+  }
+  events.sort((a, b) => {
+    const d = a.at.getTime() - b.at.getTime()
+    if (d !== 0) return d
+    return a.exit.id.localeCompare(b.exit.id)
+  })
+  return events
+}
+
 export type BuildAnalyticsInput = {
   timeZone: string
   fromYmd: string
@@ -88,16 +120,15 @@ export type BuildAnalyticsInput = {
   symbolFilter: string | null
   strategyFilter: string | null
   marketTypeFilter: string | null
-  tradesClosedStrictlyBeforeStart: TradeWithLegs[]
-  tradesClosedInPeriod: TradeWithLegs[]
-  /** Cashflow до начала периода (тот же скоуп журнала). */
+  /** Все сделки журнала для equity до/после выхода. */
+  allTradesForEquity: TradeWithLegs[]
+  /** Трейды с выходом в периоде (фильтры аналитики). */
+  tradesWithExitsInPeriod: TradeWithLegs[]
   cashflowsStrictlyBeforeStart: Cashflow[]
   cashflowsInPeriod: Cashflow[]
-  /** Есть ли у пользователя хотя бы одна cashflow-запись в скоупе журнала. */
   journalHasCashflow: boolean
-  /** Начало периода (UTC), для capital0. */
   periodStartUtc: Date
-  /** DEP/WITH без accountId — привязка к дефолтному счёту (скоуп журнала). */
+  periodEndExclusiveUtc: Date
   legacyCashflowAccountId?: string | null
 }
 
@@ -111,12 +142,13 @@ export function buildAnalyticsSnapshot(input: BuildAnalyticsInput): AnalyticsSna
     symbolFilter,
     strategyFilter,
     marketTypeFilter,
-    tradesClosedStrictlyBeforeStart,
-    tradesClosedInPeriod,
+    allTradesForEquity,
+    tradesWithExitsInPeriod,
     cashflowsStrictlyBeforeStart,
     cashflowsInPeriod,
     journalHasCashflow,
     periodStartUtc,
+    periodEndExclusiveUtc,
     legacyCashflowAccountId,
   } = input
 
@@ -125,27 +157,32 @@ export function buildAnalyticsSnapshot(input: BuildAnalyticsInput): AnalyticsSna
     journalAccountId: accountId ?? undefined,
     ...(legacyCashflowAccountId ? { legacyCashflowAccountId } : {}),
   }
-  const capital0Raw = capitalUsdtBeforeExclusive(
+
+  const allCashflows = [...cashflowsStrictlyBeforeStart, ...cashflowsInPeriod]
+  const cfSorted = allCashflows
+    .slice()
+    .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+
+  const capital0Raw = equityUsdtBeforeExitLeg(
     periodStartUtc,
-    tradesClosedStrictlyBeforeStart,
-    cashflowsStrictlyBeforeStart,
+    allTradesForEquity,
+    cfSorted,
     scope,
     journalHasCashflow,
   )
   const capital0 = Number.isFinite(capital0Raw) ? capital0Raw : JOURNAL_INITIAL_DEPOSIT_USDT
 
-  const allCashflows = [...cashflowsStrictlyBeforeStart, ...cashflowsInPeriod]
   const netCfAll = netCashflowPortfolioUsdt(allCashflows, scope)
   const journalDepositUsdt = journalHasCashflow
     ? Math.max(Number.isFinite(netCfAll) ? netCfAll : 0, 0)
     : JOURNAL_INITIAL_DEPOSIT_USDT
 
-  const period = tradesClosedInPeriod
-    .filter((t) => t.status === TradeStatus.CLOSED && t.closedAt != null)
-    .slice()
-    .sort((a, b) => new Date(a.closedAt!).getTime() - new Date(b.closedAt!).getTime())
-
-  const pnls = period.map((t) => pnlForClosedTrade(t))
+  const exitEvents = collectExitEventsInPeriod(
+    tradesWithExitsInPeriod,
+    periodStartUtc,
+    periodEndExclusiveUtc,
+  )
+  const pnls = exitEvents.map((e) => e.pnl)
   const totalPnl = pnls.reduce((a, b) => a + b, 0)
   const roiDenom =
     capital0 > 1e-9
@@ -166,11 +203,12 @@ export function buildAnalyticsSnapshot(input: BuildAnalyticsInput): AnalyticsSna
   let worst: number | null = null
   let maxRoi: number | null = null
   let maxDepositRoi: number | null = null
+  let maxDailyDepositRoi: number | null = null
   let sumHolding = 0
   let holdingN = 0
 
-  for (let i = 0; i < period.length; i++) {
-    const p = pnls[i]!
+  for (const ev of exitEvents) {
+    const p = ev.pnl
     if (p > 0) {
       winCount++
       wins.push(p)
@@ -185,21 +223,38 @@ export function buildAnalyticsSnapshot(input: BuildAnalyticsInput): AnalyticsSna
     if (p > 0 && (best == null || p > best)) best = p
     if (p < 0 && (worst == null || p < worst)) worst = p
 
-    const j = buildTradeJournalMetrics(toLegs(period[i]!), journalDepositUsdt)
-    if (j.tradeRoiPct != null && Number.isFinite(j.tradeRoiPct)) {
-      maxRoi = maxRoi == null ? j.tradeRoiPct : Math.max(maxRoi, j.tradeRoiPct)
+    const equityBeforeRaw = equityUsdtBeforeExitLeg(
+      ev.at,
+      allTradesForEquity,
+      cfSorted,
+      scope,
+      journalHasCashflow,
+    )
+    const equityBefore = Number.isFinite(equityBeforeRaw) ? equityBeforeRaw : 0
+    const depositRoiPct = equityBefore > 1e-9 ? (p / equityBefore) * 100 : null
+    if (ev.roiLegPct != null && Number.isFinite(ev.roiLegPct)) {
+      maxRoi = maxRoi == null ? ev.roiLegPct : Math.max(maxRoi, ev.roiLegPct)
     }
-    if (journalDepositUsdt > 0) {
-      const dr = (p / journalDepositUsdt) * 100
-      maxDepositRoi = maxDepositRoi == null ? dr : Math.max(maxDepositRoi, dr)
+    if (depositRoiPct != null && Number.isFinite(depositRoiPct)) {
+      maxDepositRoi =
+        maxDepositRoi == null ? depositRoiPct : Math.max(maxDepositRoi, depositRoiPct)
     }
-    if (j.durationMs != null && j.durationMs >= 0) {
-      sumHolding += j.durationMs
-      holdingN++
+
+    const t = ev.trade
+    if (
+      t.status === TradeStatus.CLOSED &&
+      t.closedAt &&
+      Math.abs(t.closedAt.getTime() - ev.at.getTime()) < 60_000
+    ) {
+      const j = buildTradeJournalMetrics(t, equityBefore > 1e-9 ? equityBefore : undefined)
+      if (j.durationMs != null && j.durationMs >= 0) {
+        sumHolding += j.durationMs
+        holdingN++
+      }
     }
   }
 
-  const closedCount = period.length
+  const closedCount = exitEvents.length
   const winratePercent = closedCount > 0 ? (winCount / closedCount) * 100 : null
   const avgWin = wins.length > 0 ? wins.reduce((a, b) => a + b, 0) / wins.length : null
   const avgLoss = losses.length > 0 ? losses.reduce((a, b) => a + b, 0) / losses.length : null
@@ -214,11 +269,13 @@ export function buildAnalyticsSnapshot(input: BuildAnalyticsInput): AnalyticsSna
       ? winRateDec * avgWin + lossRateDec * avgLoss
       : null
 
-  const equityCurve = buildAnalyticsEquityCurve(
+  const equityCurve = buildAnalyticsEquityCurveFromExits(
     capital0,
-    tradesClosedInPeriod,
+    allTradesForEquity,
     cashflowsInPeriod,
     scope,
+    periodStartUtc,
+    periodEndExclusiveUtc,
   )
   const { maxDdUsd, peak } = maxDrawdownFromBalances(
     capital0,
@@ -230,10 +287,9 @@ export function buildAnalyticsSnapshot(input: BuildAnalyticsInput): AnalyticsSna
   const recoveryFactor = maxDdUsd > 1e-9 ? totalPnl / maxDdUsd : null
 
   const dayMap = new Map<string, number>()
-  for (let i = 0; i < period.length; i++) {
-    const t = period[i]!
-    const ymd = formatInTimeZone(new Date(t.closedAt!), timeZone, "yyyy-MM-dd")
-    dayMap.set(ymd, (dayMap.get(ymd) ?? 0) + pnls[i]!)
+  for (const ev of exitEvents) {
+    const ymd = formatInTimeZone(ev.at, timeZone, "yyyy-MM-dd")
+    dayMap.set(ymd, (dayMap.get(ymd) ?? 0) + ev.pnl)
   }
   const pnlByDay: AnalyticsDayPnlDto[] = [...dayMap.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
@@ -241,14 +297,29 @@ export function buildAnalyticsSnapshot(input: BuildAnalyticsInput): AnalyticsSna
 
   const sharpeRatio = sharpeFromDailyPnls(pnlByDay.map((d) => d.pnlUsdt))
 
+  for (const { dayYmd, pnlUsdt } of pnlByDay) {
+    const { start: dayStartUtc } = zonedPeriodHalfOpenUtc(timeZone, dayYmd, dayYmd)
+    const equityDayStart = equityUsdtBeforeExitLeg(
+      dayStartUtc,
+      allTradesForEquity,
+      cfSorted,
+      scope,
+      journalHasCashflow,
+    )
+    if (equityDayStart > 1e-9) {
+      const dayRoi = (pnlUsdt / equityDayStart) * 100
+      maxDailyDepositRoi =
+        maxDailyDepositRoi == null ? dayRoi : Math.max(maxDailyDepositRoi, dayRoi)
+    }
+  }
+
   const stratMap = new Map<string, { pnl: number; count: number; wins: number }>()
-  for (let i = 0; i < period.length; i++) {
-    const t = period[i]!
-    const key = t.strategy?.trim() || "—"
+  for (const ev of exitEvents) {
+    const key = ev.trade.strategy?.trim() || "—"
     const row = stratMap.get(key) ?? { pnl: 0, count: 0, wins: 0 }
-    row.pnl += pnls[i]!
+    row.pnl += ev.pnl
     row.count++
-    if (pnls[i]! > 0) row.wins++
+    if (ev.pnl > 0) row.wins++
     stratMap.set(key, row)
   }
   const strategySlices: AnalyticsStrategySliceDto[] = [...stratMap.entries()].map(([strategy, v]) => ({
@@ -259,23 +330,21 @@ export function buildAnalyticsSnapshot(input: BuildAnalyticsInput): AnalyticsSna
   }))
 
   const symMap = new Map<string, { pnl: number; count: number }>()
-  for (let i = 0; i < period.length; i++) {
-    const t = period[i]!
-    const row = symMap.get(t.symbol) ?? { pnl: 0, count: 0 }
-    row.pnl += pnls[i]!
+  for (const ev of exitEvents) {
+    const row = symMap.get(ev.trade.symbol) ?? { pnl: 0, count: 0 }
+    row.pnl += ev.pnl
     row.count++
-    symMap.set(t.symbol, row)
+    symMap.set(ev.trade.symbol, row)
   }
   const symbolSlices: AnalyticsSymbolSliceDto[] = [...symMap.entries()]
     .sort((a, b) => b[1].pnl - a[1].pnl)
     .map(([symbol, v]) => ({ symbol, pnlUsdt: v.pnl, count: v.count }))
 
   const wdMap = new Map<number, { pnl: number; count: number }>()
-  for (let i = 0; i < period.length; i++) {
-    const t = period[i]!
-    const dow = Number(formatInTimeZone(new Date(t.closedAt!), timeZone, "i"))
+  for (const ev of exitEvents) {
+    const dow = Number(formatInTimeZone(ev.at, timeZone, "i"))
     const row = wdMap.get(dow) ?? { pnl: 0, count: 0 }
-    row.pnl += pnls[i]!
+    row.pnl += ev.pnl
     row.count++
     wdMap.set(dow, row)
   }
@@ -292,11 +361,10 @@ export function buildAnalyticsSnapshot(input: BuildAnalyticsInput): AnalyticsSna
     })
 
   const hourMap = new Map<number, { pnl: number; count: number }>()
-  for (let i = 0; i < period.length; i++) {
-    const t = period[i]!
-    const h = Number(formatInTimeZone(new Date(t.closedAt!), timeZone, "H"))
+  for (const ev of exitEvents) {
+    const h = Number(formatInTimeZone(ev.at, timeZone, "H"))
     const row = hourMap.get(h) ?? { pnl: 0, count: 0 }
-    row.pnl += pnls[i]!
+    row.pnl += ev.pnl
     row.count++
     hourMap.set(h, row)
   }
@@ -305,11 +373,10 @@ export function buildAnalyticsSnapshot(input: BuildAnalyticsInput): AnalyticsSna
     .map(([hour, v]) => ({ hour, pnlUsdt: v.pnl, count: v.count }))
 
   const mdMap = new Map<string, { pnl: number; count: number }>()
-  for (let i = 0; i < period.length; i++) {
-    const t = period[i]!
-    const key = `${t.marketType}_${t.direction}`
+  for (const ev of exitEvents) {
+    const key = `${ev.trade.marketType}_${ev.trade.direction}`
     const row = mdMap.get(key) ?? { pnl: 0, count: 0 }
-    row.pnl += pnls[i]!
+    row.pnl += ev.pnl
     row.count++
     mdMap.set(key, row)
   }
@@ -327,16 +394,15 @@ export function buildAnalyticsSnapshot(input: BuildAnalyticsInput): AnalyticsSna
 
   const emEntryMap = new Map<string, { pnl: number; count: number }>()
   const emExitMap = new Map<string, { pnl: number; count: number }>()
-  for (let i = 0; i < period.length; i++) {
-    const t = period[i]!
-    const ek = t.emotionEntry?.trim() || "—"
-    const exk = t.emotionExit?.trim() || "—"
+  for (const ev of exitEvents) {
+    const ek = ev.trade.emotionEntry?.trim() || "—"
+    const exk = ev.trade.emotionExit?.trim() || "—"
     const pe = emEntryMap.get(ek) ?? { pnl: 0, count: 0 }
-    pe.pnl += pnls[i]!
+    pe.pnl += ev.pnl
     pe.count++
     emEntryMap.set(ek, pe)
     const px = emExitMap.get(exk) ?? { pnl: 0, count: 0 }
-    px.pnl += pnls[i]!
+    px.pnl += ev.pnl
     px.count++
     emExitMap.set(exk, px)
   }
@@ -374,6 +440,7 @@ export function buildAnalyticsSnapshot(input: BuildAnalyticsInput): AnalyticsSna
     worstTradePnlUsdt: worst,
     maxTradeRoiPercent: maxRoi,
     maxDepositRoiPercent: maxDepositRoi,
+    maxDailyDepositRoiPercent: maxDailyDepositRoi,
     sharpeRatio,
     maxDrawdownUsdt,
     maxDrawdownPercent,

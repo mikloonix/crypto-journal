@@ -66,7 +66,7 @@ export const riskEvaluationService = {
       /* optional */
     }
 
-    const equityTradesRaw = await tradesRepository.findClosedWithLegsForJournalScope(
+    const equityTradesRaw = await tradesRepository.findTradesWithLegsForJournalEquity(
       userId,
       journalAllAccounts,
       journalAccountId,

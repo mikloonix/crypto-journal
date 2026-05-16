@@ -101,7 +101,24 @@ export const tradesRepository = {
     })
   },
 
-  /** Все закрытые сделки для equity / summary (скоуп журнала), без фильтров таблицы. */
+  /** Все сделки журнала (открытые и закрытые) — equity/PnL по выходам. */
+  findTradesWithLegsForJournalEquity(
+    userId: string,
+    journalAllAccounts: boolean,
+    journalAccountId: string | undefined,
+  ) {
+    const scope = journalScopeWhere(journalAllAccounts, journalAccountId)
+    return prisma.trade.findMany({
+      where: {
+        ...whereActiveTrades(userId),
+        ...scope,
+      },
+      orderBy: { createdAt: "asc" },
+      include: tradeIncludeActive,
+    })
+  },
+
+  /** Все закрытые сделки (скоуп журнала), без фильтров таблицы. */
   findClosedWithLegsForJournalScope(
     userId: string,
     journalAllAccounts: boolean,
@@ -179,6 +196,44 @@ export const tradesRepository = {
         closedAt: { lt: periodStartUtc },
       },
       orderBy: { closedAt: "asc" },
+      include: tradeIncludeActive,
+    })
+  },
+
+  /**
+   * Трейды со хотя бы одним выходом (нога) в [start, endExclusive) — для аналитики по сделкам (выходам).
+   */
+  findTradesWithExitsInAnalyticsPeriod(
+    userId: string,
+    startUtc: Date,
+    endExclusiveUtc: Date,
+    journalAllAccounts: boolean,
+    journalAccountId: string | undefined,
+    filters: { symbol?: string; strategy?: string; marketType?: MarketType },
+  ) {
+    const scope = journalScopeWhere(journalAllAccounts, journalAccountId)
+    const w: Prisma.TradeWhereInput = {
+      ...whereActiveTrades(userId),
+      ...scope,
+      exits: {
+        some: {
+          deletedAt: null,
+          timestamp: { gte: startUtc, lt: endExclusiveUtc },
+        },
+      },
+    }
+    if (filters.symbol?.trim()) {
+      w.symbol = { contains: filters.symbol.trim(), mode: "insensitive" }
+    }
+    if (filters.strategy?.trim()) {
+      w.strategy = { contains: filters.strategy.trim(), mode: "insensitive" }
+    }
+    if (filters.marketType) {
+      w.marketType = filters.marketType
+    }
+    return prisma.trade.findMany({
+      where: w,
+      orderBy: { createdAt: "asc" },
       include: tradeIncludeActive,
     })
   },

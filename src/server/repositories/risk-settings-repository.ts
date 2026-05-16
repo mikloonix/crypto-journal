@@ -44,6 +44,14 @@ export const riskSettingsRepository = {
       riskPerDay?: number
       maxDrawdown?: number
       maxOpenRisk?: number
+      forecastDepositTargetUsdt?: number | null
+      forecastPlanDepositTargetUsdt?: number | null
+      forecastTradeRoiPercent?: number | null
+      forecastPlanTradeRoiPercent?: number | null
+      forecastDeadlineYmd?: string | null
+      forecastStartedAtYmd?: string | null
+      forecastStartEquityUsdt?: number | null
+      forecastStartTradesToGoal?: number | null
     },
   ) {
     return prisma.riskSettings.upsert({

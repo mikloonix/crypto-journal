@@ -6,7 +6,7 @@
 
 **Визуальный стандарт UI:** `UI-GUIDELINES.md`.
 
-**Статус этапа 2** (домен + журнал): выполнен по `02-stage-trades-domain-and-journal.md` (фильтры, группировки, карточки). **Статус этапа 2.3:** выполнен. **Статус этапа 2.5:** выполнен (app shell, счета, справочники, см. `02_5-stage-app-shell-and-settings.md`). **Статус этапа 2.6 (MVP):** выполнен — см. `02_6-stage-dashboard-widgets.md`. **Этап 3.5:** выполнен. **Этап 4 (MVP):** выполнен — см. `04-stage-risk-management.md`. **Уточнения после MVP журнала/equity:** колонка «ROI деп.» на закрытых — от **equity журнала на момент закрытия сделки / времени выхода** (до учёта этой операции); legacy cashflow без `accountId` — к дефолтному счёту в односчётном скоупе (см. `03_5-stage-portfolio-and-cashflows.md`). Следующий ориентир — **4.1** (кросс-маржа) или **4.5** (прогноз), доработка аналитики этапа **3**.
+**Статус этапа 2** (домен + журнал): выполнен по `02-stage-trades-domain-and-journal.md` (фильтры, группировки, карточки). **Статус этапа 2.3:** выполнен. **Статус этапа 2.5:** выполнен (app shell, счета, справочники, см. `02_5-stage-app-shell-and-settings.md`). **Статус этапа 2.6 (MVP):** выполнен — см. `02_6-stage-dashboard-widgets.md`. **Этап 3.5:** выполнен. **Этап 4 (MVP):** выполнен — см. `04-stage-risk-management.md`. **Уточнения после MVP журнала/equity:** колонка «ROI деп.» на закрытых — от **equity журнала на момент закрытия сделки / времени выхода** (до учёта этой операции); legacy cashflow без `accountId` — к дефолтному счёту в односчётном скоупе (см. `03_5-stage-portfolio-and-cashflows.md`). **Этап 4.5 (MVP):** выполнен — см. `04_5-stage-forecast.md`. Следующий ориентир — **4.1** (кросс-маржа), доработка аналитики этапа **3**.
 
 ## Этапы
 
@@ -16,12 +16,12 @@
 | 2 | `02-stage-trades-domain-and-journal.md` | домен сделок: trade + entries/exits, журнал |
 | 2.3 ✅ | `02_3-stage-architecture-and-api-consistency.md` | слои backend, envelope API, DTO, data flow, декомпозиция UI |
 | 2.5 ✅ | `02_5-stage-app-shell-and-settings.md` | app shell, справочники, выбор `Account`, `/settings/accounts` + `/settings/catalogs` |
-| 2.6 ✅ | `02_6-stage-dashboard-widgets.md` | PnL/ROI за день, усреднение; цель дня — 4.5; фиат — позже |
+| 2.6 ✅ | `02_6-stage-dashboard-widgets.md` | PnL/ROI за день, усреднение; цель дня (прогноз 4.5); фиат — позже |
 | 3 🔄 | `03-stage-analytics-and-visuals.md` | аналитика + графики; TZ из настроек; вкладки графиков без гистограммы «Распределение» в UI (см. док) |
 | 3.5 ✅ | `03_5-stage-portfolio-and-cashflows.md` | портфель, ввод/вывод, equity от депозитов |
 | 4 ✅ | `04-stage-risk-management.md` | риск-менеджмент, правила, подсветка (MVP; тесты — 5.5) |
 | 4.1 | `04_1-stage-cross-margin-risk.md` | кросс-маржа, совокупный риск, what-if ликвидации |
-| 4.5 | `04_5-stage-forecast.md` | прогноз, цель по депозиту/дню, `/forecast` |
+| 4.5 ✅ | `04_5-stage-forecast.md` | прогноз, цель по депозиту/дню, `/forecast`, план/онлайн |
 | 5 | `05-stage-import-export-and-bingx.md` | xlsx + BingX import/sync |
 | 5.5 | `05_5-stage-testing.md` | unit/интеграционные тесты, CI |
 | 6 | `06-stage-production-readiness.md` | прод: деплой, бэкапы, мониторинг |

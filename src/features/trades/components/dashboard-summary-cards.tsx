@@ -1,7 +1,11 @@
 "use client"
 
 import type { JournalRiskSummaryDto } from "@/contracts/risk"
-import { formatDecimal, formatInQuote, formatPercent } from "@/lib/format-amount"
+import {
+  formatDecimal,
+  formatDisplayPercent,
+  formatInQuoteDisplay,
+} from "@/lib/format-amount"
 
 type Props = {
   balance: number
@@ -17,18 +21,18 @@ export function DashboardSummaryCards({ balance, totalPnL, roi, openCount, risk 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded bg-[#111] p-4">
           <p className="text-sm text-gray-400">Депозит</p>
-          <p className="text-xl">{formatInQuote(balance, "USDT")}</p>
+          <p className="text-xl">{formatInQuoteDisplay(balance, "USDT")}</p>
         </div>
         <div className="rounded bg-[#111] p-4">
           <p className="text-sm text-gray-400">PnL</p>
           <p className={totalPnL >= 0 ? "text-xl text-green-400" : "text-xl text-red-400"}>
-            {formatInQuote(totalPnL, "USDT")}
+            {formatInQuoteDisplay(totalPnL, "USDT")}
           </p>
         </div>
         <div className="rounded bg-[#111] p-4">
           <p className="text-sm text-gray-400">ROI / Открыто</p>
           <p className={roi >= 0 ? "text-xl text-green-400" : "text-xl text-red-400"}>
-            {formatPercent(roi)}% · открыто: {openCount}
+            {formatDisplayPercent(roi)}% · открыто: {openCount}
           </p>
         </div>
       </div>
@@ -38,7 +42,7 @@ export function DashboardSummaryCards({ balance, totalPnL, roi, openCount, risk 
           <div className="rounded bg-[#111] p-4">
             <p className="text-sm text-gray-400">Open risk</p>
             <p className="text-lg tabular-nums">
-              {formatInQuote(risk.openRiskUsdt, "USDT")}{" "}
+              {formatInQuoteDisplay(risk.openRiskUsdt, "USDT")}{" "}
               <span className="text-sm text-gray-400">({formatDecimal(risk.openRiskPctSum)}%)</span>
             </p>
           </div>

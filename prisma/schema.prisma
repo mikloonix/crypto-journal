@@ -167,6 +167,22 @@ model RiskSettings {
   journalAllAccounts Boolean @default(false)
   /// IANA timezone (этап 3): аналитика, группировки по дню/часу, календарный день на дашборде.
   displayTimeZone    String   @default("UTC")
+  /// Этап 4.5 — цель прогноза онлайн / дашборд (USDT).
+  forecastDepositTargetUsdt Float?
+  /// Этап 4.5 — цель депозита только для режима «План» (независимо от онлайн).
+  forecastPlanDepositTargetUsdt Float?
+  /// Этап 4.5 — плановый ROI на сделку (онлайн), % (0.5–100 в UI).
+  forecastTradeRoiPercent   Float?
+  /// Этап 4.5 — плановый ROI на сделку (режим «План»), %.
+  forecastPlanTradeRoiPercent Float?
+  /// Этап 4.5 — крайний срок цели по календарю в displayTimeZone, YYYY-MM-DD.
+  forecastDeadlineYmd       String?
+  /// Календарный день постановки онлайн-цели (displayTimeZone), YYYY-MM-DD.
+  forecastStartedAtYmd    String?
+  /// Equity журнала на момент forecastStartedAtYmd.
+  forecastStartEquityUsdt   Float?
+  /// Сделок до онлайн-цели (компаунд) на момент старта.
+  forecastStartTradesToGoal Int?
   updatedAt          DateTime @updatedAt
 
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)

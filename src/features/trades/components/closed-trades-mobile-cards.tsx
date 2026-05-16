@@ -4,7 +4,7 @@ import type { Dispatch, SetStateAction } from "react"
 import type { TradeListItemDto } from "@/contracts/trades"
 import type { ClosedTradesGroup, JournalGroupMode } from "@/features/trades/journal-grouping"
 import { formatDurationMs } from "@/lib/format-duration"
-import { formatDecimal, formatInQuote, formatPercent } from "@/lib/format-amount"
+import { formatDecimal, formatDisplayPercent, formatInQuote } from "@/lib/format-amount"
 import { quoteCurrencyFromSymbol } from "@/lib/quote-currency"
 
 type Props = {
@@ -13,6 +13,8 @@ type Props = {
   expanded: Record<string, boolean>
   setExpanded: Dispatch<SetStateAction<Record<string, boolean>>>
   onDeleteTrade: (_id: string) => void
+  /** Подсветка строки по deep-link `?tradeId=` */
+  highlightTradeId?: string | null
 }
 
 function formatGroupPnlLine(trades: TradeListItemDto[], sumPnl: number): string {
@@ -29,6 +31,7 @@ export function ClosedTradesMobileCards({
   expanded,
   setExpanded,
   onDeleteTrade,
+  highlightTradeId,
 }: Props) {
   return (
     <div className="flex flex-col gap-4">
@@ -59,7 +62,7 @@ export function ClosedTradesMobileCards({
                         : "text-gray-300"
                   }
                 >
-                  ROI: {g.groupRoiPct != null ? `${formatPercent(g.groupRoiPct)}%` : "—"}
+                  ROI: {g.groupRoiPct != null ? `${formatDisplayPercent(g.groupRoiPct)}%` : "—"}
                 </span>
               </div>
             </div>
@@ -71,10 +74,14 @@ export function ClosedTradesMobileCards({
             const roi = j.tradeRoiPct ?? 0
             const depositRoi = j.depositRoiPct
             const open = expanded[t.id] ?? false
+            const isHighlight = highlightTradeId === t.id
             return (
               <div
                 key={t.id}
-                className="rounded-lg border border-gray-800 bg-[#0b0b0b] p-3 text-sm text-gray-200"
+                id={`closed-trade-row-${t.id}`}
+                className={`rounded-lg border border-gray-800 bg-[#0b0b0b] p-3 text-sm text-gray-200 ${
+                  isHighlight ? "ring-2 ring-amber-500/50" : ""
+                }`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
@@ -95,7 +102,7 @@ export function ClosedTradesMobileCards({
                       {formatInQuote(pnl, q)}
                     </div>
                     <div className={roi > 0 ? "text-green-400" : roi < 0 ? "text-red-400" : ""}>
-                      ROI {formatPercent(roi)}%
+                      ROI {formatDisplayPercent(roi)}%
                     </div>
                     {depositRoi != null ? (
                       <div
@@ -107,7 +114,7 @@ export function ClosedTradesMobileCards({
                               : "text-gray-400"
                         }
                       >
-                        ROI деп. {formatPercent(depositRoi)}%
+                        ROI деп. {formatDisplayPercent(depositRoi)}%
                       </div>
                     ) : null}
                   </div>

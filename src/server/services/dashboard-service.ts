@@ -18,6 +18,7 @@ import { riskSettingsRepository } from "@/server/repositories/risk-settings-repo
 import { accountRepository } from "@/server/repositories/account-repository"
 import { cashflowRepository } from "@/server/repositories/cashflow-repository"
 import { tradesRepository } from "@/server/repositories/trades-repository"
+import { forecastService } from "@/server/services/forecast-service"
 import { buildTradeJournalMetrics, type TradeWithLegs } from "@/server/trading/journal-metrics"
 import { netCashflowPortfolioUsdt } from "@/server/trading/cashflow-usdt"
 import { capitalUsdtBeforeExclusive } from "@/server/trading/equity-timeline"
@@ -116,6 +117,8 @@ export const dashboardService = {
     const roiDayPercent =
       balanceAtDayStart > 1e-9 ? (pnlUsdt / balanceAtDayStart) * 100 : null
 
+    const forecastMeta = await forecastService.getDerivativeForDashboard(userId)
+
     return {
       ok: true,
       data: {
@@ -124,6 +127,8 @@ export const dashboardService = {
         roiDayPercent,
         balanceAtDayStartUsdt: balanceAtDayStart,
         displayCurrency: "USDT",
+        derivativeDayTargetUsdt: forecastMeta.derivativeDayTargetUsdt,
+        forecastConfigured: forecastMeta.forecastConfigured,
       },
     }
   },

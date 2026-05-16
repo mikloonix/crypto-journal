@@ -29,7 +29,12 @@ import { isValidIanaTimeZone } from "@/lib/iana-time-zone"
 import { zonedRollingPeriodInclusiveYmd } from "@/lib/zoned-date-range"
 import { useProtectedPageSession } from "@/features/trades/hooks/use-protected-page-session"
 import { redirectOn401 } from "@/features/trades/session-expired"
-import { formatDecimal, formatInQuote, formatPercent } from "@/lib/format-amount"
+import {
+  formatDisplayNumber,
+  formatDisplayPercent,
+  formatHoldingDuration,
+  formatInQuoteDisplay,
+} from "@/lib/format-amount"
 import { ru } from "date-fns/locale"
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz"
 
@@ -88,9 +93,9 @@ function dayCalendarTooltip(ymd: string, pnl: number | null, equityAtStart: Map<
   if (pnl == null) return `${ymd}: нет сделок`
   const eq0 = equityAtStart.get(ymd)
   const roi = eq0 != null && eq0 > 1e-9 ? (pnl / eq0) * 100 : null
-  const pnlPart = `PnL ${formatInQuote(pnl, "USDT")}`
+  const pnlPart = `PnL ${formatInQuoteDisplay(pnl, "USDT")}`
   const roiPart =
-    roi != null ? ` · ROI ${formatPercent(roi)}% (от капитала на начало дня в периоде)` : ""
+    roi != null ? ` · ROI ${formatDisplayPercent(roi)}% (от капитала на начало дня в периоде)` : ""
   return `${ymd} · ${pnlPart}${roiPart}`
 }
 
@@ -614,46 +619,58 @@ export default function AnalyticsPage() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {card("PnL", formatInQuote(s.totalPnlUsdt, "USDT"))}
+            {card("PnL", formatInQuoteDisplay(s.totalPnlUsdt, "USDT"))}
             {card(
               "PnL %",
-              s.pnlPercentPeriod != null ? `${formatPercent(s.pnlPercentPeriod)}%` : "—",
+              s.pnlPercentPeriod != null ? `${formatDisplayPercent(s.pnlPercentPeriod)}%` : "—",
               s.pnlPercentPeriod == null
                 ? "Нет базы для % (депозит / капитал на начало периода)"
                 : undefined,
             )}
-            {card("Winrate", s.winratePercent != null ? `${formatPercent(s.winratePercent)}%` : "—")}
-            {card("Сделок", String(s.closedCount))}
-            {card("Avg win", s.avgWinUsdt != null ? formatInQuote(s.avgWinUsdt, "USDT") : "—")}
-            {card("Avg loss", s.avgLossUsdt != null ? formatInQuote(s.avgLossUsdt, "USDT") : "—")}
-            {card("Profit factor", s.profitFactor != null ? formatDecimal(s.profitFactor) : "—")}
-            {card("Risk/Reward", s.riskReward != null ? formatDecimal(s.riskReward) : "—")}
-            {card("Gross profit", formatInQuote(s.grossProfitUsdt, "USDT"))}
-            {card("Gross loss", formatInQuote(s.grossLossUsdt, "USDT"))}
-            {card("Best", s.bestTradePnlUsdt != null ? formatInQuote(s.bestTradePnlUsdt, "USDT") : "—")}
-            {card("Worst", s.worstTradePnlUsdt != null ? formatInQuote(s.worstTradePnlUsdt, "USDT") : "—")}
-            {card("Стартовый депозит", formatInQuote(s.journalDepositUsdt, "USDT"))}
+            {card("Winrate", s.winratePercent != null ? `${formatDisplayPercent(s.winratePercent)}%` : "—")}
+            {card("Сделок (выходов)", String(s.closedCount))}
+            {card("Avg win", s.avgWinUsdt != null ? formatInQuoteDisplay(s.avgWinUsdt, "USDT") : "—")}
+            {card("Avg loss", s.avgLossUsdt != null ? formatInQuoteDisplay(s.avgLossUsdt, "USDT") : "—")}
+            {card("Profit factor", s.profitFactor != null ? formatDisplayNumber(s.profitFactor) : "—")}
+            {card("Risk/Reward", s.riskReward != null ? formatDisplayNumber(s.riskReward) : "—")}
+            {card("Gross profit", formatInQuoteDisplay(s.grossProfitUsdt, "USDT"))}
+            {card("Gross loss", formatInQuoteDisplay(s.grossLossUsdt, "USDT"))}
+            {card("Best", s.bestTradePnlUsdt != null ? formatInQuoteDisplay(s.bestTradePnlUsdt, "USDT") : "—")}
+            {card("Worst", s.worstTradePnlUsdt != null ? formatInQuoteDisplay(s.worstTradePnlUsdt, "USDT") : "—")}
+            {card("Стартовый депозит", formatInQuoteDisplay(s.journalDepositUsdt, "USDT"))}
           </div>
 
           <div>
             <h2 className="mb-2 text-sm font-medium text-[var(--text-secondary)]">Расширенные</h2>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {card("Sharpe (дн.)", s.sharpeRatio != null ? formatDecimal(s.sharpeRatio) : "—")}
-              {card("Max DD USDT", formatDecimal(s.maxDrawdownUsdt))}
+              {card("Sharpe (дн.)", s.sharpeRatio != null ? formatDisplayNumber(s.sharpeRatio) : "—")}
+              {card("Max DD USDT", formatDisplayNumber(s.maxDrawdownUsdt))}
               {card(
                 "Max DD %",
-                s.maxDrawdownPercent != null ? `${formatPercent(s.maxDrawdownPercent)}%` : "—",
+                s.maxDrawdownPercent != null ? `${formatDisplayPercent(s.maxDrawdownPercent)}%` : "—",
               )}
-              {card("Expectancy", s.expectancyUsdt != null ? formatInQuote(s.expectancyUsdt, "USDT") : "—")}
-              {card("Recovery", s.recoveryFactor != null ? formatDecimal(s.recoveryFactor) : "—")}
+              {card(
+                "Expectancy",
+                s.expectancyUsdt != null ? formatInQuoteDisplay(s.expectancyUsdt, "USDT") : "—",
+              )}
+              {card("Recovery", s.recoveryFactor != null ? formatDisplayNumber(s.recoveryFactor) : "—")}
               {card(
                 "Ср. удержание",
-                s.avgHoldingMs != null ? `${formatDecimal(s.avgHoldingMs / 3600000)} ч` : "—",
+                s.avgHoldingMs != null ? formatHoldingDuration(s.avgHoldingMs) : "—",
               )}
-              {card("Max ROI сделки", s.maxTradeRoiPercent != null ? `${formatPercent(s.maxTradeRoiPercent)}%` : "—")}
+              {card(
+                "Max ROI сделки",
+                s.maxTradeRoiPercent != null ? `${formatDisplayPercent(s.maxTradeRoiPercent)}%` : "—",
+              )}
               {card(
                 "Макс. ROI к депозиту",
-                s.maxDepositRoiPercent != null ? `${formatPercent(s.maxDepositRoiPercent)}%` : "—",
+                s.maxDepositRoiPercent != null ? `${formatDisplayPercent(s.maxDepositRoiPercent)}%` : "—",
+              )}
+              {card(
+                "Макс. ROI за день к деп.",
+                s.maxDailyDepositRoiPercent != null
+                  ? `${formatDisplayPercent(s.maxDailyDepositRoiPercent)}%`
+                  : "—",
               )}
             </div>
           </div>
@@ -846,7 +863,10 @@ export default function AnalyticsPage() {
                             />
                           ))}
                         </Pie>
-                        <Tooltip contentStyle={chartTooltipStyle()} formatter={(v: number) => formatInQuote(v, "USDT")} />
+                        <Tooltip
+                          contentStyle={chartTooltipStyle()}
+                          formatter={(v: number) => formatInQuoteDisplay(v, "USDT")}
+                        />
                       </PieChart>
                     </ResponsiveContainer>
                   )}

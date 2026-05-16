@@ -5,8 +5,12 @@ import { tradesRepository } from "@/server/repositories/trades-repository"
 import { accountRepository } from "@/server/repositories/account-repository"
 import { buildJournalEquitySummary } from "@/server/trading/equity-timeline"
 import type { TradeWithLegs } from "@/server/trading/journal-metrics"
+import { formatInTimeZone } from "date-fns-tz"
+import { countCompoundStepsToGoal, FORECAST_DEADLINE_YMD_RE } from "@/server/trading/forecast-engine"
 import { riskSettingsPatchSchema } from "@/server/validation/risk-settings"
 import { zodErrorMessage } from "@/server/validation/zod-helpers"
+
+const EPS = 1e-9
 
 function toDto(row: {
   accountBalance: number
@@ -14,6 +18,13 @@ function toDto(row: {
   riskPerDay: number
   maxDrawdown: number
   maxOpenRisk: number
+  forecastDepositTargetUsdt: number | null
+  forecastPlanDepositTargetUsdt: number | null
+  forecastTradeRoiPercent: number | null
+  forecastPlanTradeRoiPercent: number | null
+  forecastDeadlineYmd: string | null
+  forecastStartedAtYmd: string | null
+  forecastStartEquityUsdt: number | null
 }): RiskSettingsDto {
   return {
     accountBalance: row.accountBalance,
@@ -21,6 +32,13 @@ function toDto(row: {
     riskPerDay: row.riskPerDay,
     maxDrawdown: row.maxDrawdown,
     maxOpenRisk: row.maxOpenRisk,
+    forecastDepositTargetUsdt: row.forecastDepositTargetUsdt ?? null,
+    forecastPlanDepositTargetUsdt: row.forecastPlanDepositTargetUsdt ?? null,
+    forecastTradeRoiPercent: row.forecastTradeRoiPercent ?? null,
+    forecastPlanTradeRoiPercent: row.forecastPlanTradeRoiPercent ?? null,
+    forecastDeadlineYmd: row.forecastDeadlineYmd ?? null,
+    forecastStartedAtYmd: row.forecastStartedAtYmd ?? null,
+    forecastStartEquityUsdt: row.forecastStartEquityUsdt ?? null,
   }
 }
 
@@ -49,6 +67,49 @@ export const riskSettingsService = {
       return { ok: false, error: "Нет полей для обновления", status: 400 }
     }
     const row = await riskSettingsRepository.patchRiskLimits(userId, parsed.data)
+
+    if (parsed.data.forecastStartedAtYmd === null) {
+      const cleared = await riskSettingsRepository.patchRiskLimits(userId, {
+        forecastStartedAtYmd: null,
+        forecastStartEquityUsdt: null,
+        forecastStartTradesToGoal: null,
+      })
+      return { ok: true, data: toDto(cleared) }
+    }
+
+    const startTouched =
+      parsed.data.forecastStartedAtYmd !== undefined ||
+      parsed.data.forecastStartEquityUsdt !== undefined
+
+    if (startTouched) {
+      const merged = await riskSettingsRepository.upsertDefaults(userId)
+      const goal = merged.forecastDepositTargetUsdt
+      const roi = merged.forecastTradeRoiPercent
+      const startYmd = merged.forecastStartedAtYmd
+      const startEquity = merged.forecastStartEquityUsdt
+
+      if (
+        startYmd != null &&
+        FORECAST_DEADLINE_YMD_RE.test(startYmd) &&
+        goal != null &&
+        roi != null &&
+        Number(goal) > EPS &&
+        Number(roi) > EPS &&
+        startEquity != null &&
+        startEquity > EPS
+      ) {
+        const tradesToGoal = countCompoundStepsToGoal(
+          startEquity,
+          Number(goal),
+          Number(roi),
+        )
+        const updated = await riskSettingsRepository.patchRiskLimits(userId, {
+          forecastStartTradesToGoal: tradesToGoal,
+        })
+        return { ok: true, data: toDto(updated) }
+      }
+    }
+
     return { ok: true, data: toDto(row) }
   },
 
@@ -65,7 +126,7 @@ export const riskSettingsService = {
       journalAccountId,
       legacyCashflowAccountId ?? undefined,
     )
-    const equityTradesRaw = await tradesRepository.findClosedWithLegsForJournalScope(
+    const equityTradesRaw = await tradesRepository.findTradesWithLegsForJournalEquity(
       userId,
       journalAllAccounts,
       journalAccountId,

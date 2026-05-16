@@ -118,7 +118,7 @@ async function loadJournalEquityPack(userId: string): Promise<{
   } catch (err) {
     console.error("cashflow list skipped (journal still loads):", err)
   }
-  const equityTradesRaw = await tradesRepository.findClosedWithLegsForJournalScope(
+  const equityTradesRaw = await tradesRepository.findTradesWithLegsForJournalEquity(
     userId,
     journalAllAccounts,
     journalAccountId,

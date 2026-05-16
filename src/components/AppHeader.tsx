@@ -16,6 +16,7 @@ const nav = [
   { href: "/trades/closed", label: "Закрытые" },
   { href: "/analytics", label: "Аналитика" },
   { href: "/risk", label: "Риск" },
+  { href: "/forecast", label: "Прогноз" },
   { href: "/settings", label: "Настройки" },
 ] as const
 

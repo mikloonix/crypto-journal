@@ -4,6 +4,19 @@ export type RiskSettingsDto = {
   riskPerDay: number
   maxDrawdown: number
   maxOpenRisk: number
+  /** Этап 4.5 — цель по депозиту (USDT); null — не задано. */
+  forecastDepositTargetUsdt: number | null
+  forecastPlanDepositTargetUsdt: number | null
+  /** ROI % на сделку (онлайн). */
+  forecastTradeRoiPercent: number | null
+  /** ROI % на сделку (план). */
+  forecastPlanTradeRoiPercent: number | null
+  /** Календарный дедлайн `yyyy-MM-dd` в displayTimeZone пользователя. */
+  forecastDeadlineYmd: string | null
+  /** Старт онлайн-прогноза; null — все сделки журнала. */
+  forecastStartedAtYmd: string | null
+  /** Депозит на старт онлайн-прогноза. */
+  forecastStartEquityUsdt: number | null
 }
 
 export type RiskSettingsBalanceSyncDto = {

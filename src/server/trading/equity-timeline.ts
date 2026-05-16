@@ -1,4 +1,5 @@
 import { TradeStatus, type Cashflow, type Entry, type Exit, type Trade } from "@prisma/client"
+import { pnlRoiForExitLeg } from "@/lib/exit-leg-pnl"
 import { calculateTradePnL } from "@/server/trading/trade-pnl"
 import type { AnalyticsEquityPointDto } from "@/contracts/analytics"
 import type { EquityCurvePointDto, JournalSummaryDto } from "@/contracts/trades"
@@ -25,25 +26,28 @@ function tradeInScope(t: TradeWithLegsForEquity, scope: JournalEquityScope): boo
 }
 
 type TimelineRow =
-  | { kind: "trade"; at: number; pnl: number; trade: TradeClosed }
+  | { kind: "exit"; at: number; pnl: number; exitId: string }
   | { kind: "cashflow"; at: number; delta: number; id: string }
 
+/** Хронология по выходам (сделкам) + cashflow — как дневной PnL на дашборде. */
 function buildTimelineRows(
-  closedTrades: TradeWithLegsForEquity[],
+  trades: TradeWithLegsForEquity[],
   cashflows: Cashflow[],
   scope: JournalEquityScope,
 ): TimelineRow[] {
   const rows: TimelineRow[] = []
-  for (const t of closedTrades) {
-    if (!isClosed(t)) continue
+  for (const t of trades) {
     if (!tradeInScope(t, scope)) continue
-    const pnl = calculateTradePnL(t)
-    rows.push({
-      kind: "trade",
-      at: t.closedAt.getTime(),
-      pnl,
-      trade: t,
-    })
+    for (const ex of t.exits) {
+      if (ex.deletedAt != null) continue
+      const leg = pnlRoiForExitLeg(t.direction, t.entries, ex)
+      rows.push({
+        kind: "exit",
+        at: ex.timestamp.getTime(),
+        pnl: leg.pnl,
+        exitId: ex.id,
+      })
+    }
   }
   for (const cf of cashflows) {
     const delta = cashflowPortfolioDeltaUsdt(cf, scope)
@@ -53,6 +57,7 @@ function buildTimelineRows(
   rows.sort((a, b) => {
     if (a.at !== b.at) return a.at - b.at
     if (a.kind !== b.kind) return a.kind === "cashflow" ? -1 : 1
+    if (a.kind === "exit" && b.kind === "exit") return a.exitId.localeCompare(b.exitId)
     return 0
   })
   return rows
@@ -68,8 +73,14 @@ export function buildJournalEquitySummary(
   scope: JournalEquityScope,
   opts: BuildJournalEquitySummaryOpts,
 ): JournalSummaryDto {
-  const scopedClosed = closedTradesForEquity.filter((t) => isClosed(t) && tradeInScope(t, scope))
-  const totalPnlClosedUsdt = scopedClosed.reduce((s, t) => s + calculateTradePnL(t), 0)
+  let totalPnlClosedUsdt = 0
+  for (const t of closedTradesForEquity) {
+    if (!tradeInScope(t, scope)) continue
+    for (const ex of t.exits) {
+      if (ex.deletedAt != null) continue
+      totalPnlClosedUsdt += pnlRoiForExitLeg(t.direction, t.entries, ex).pnl
+    }
+  }
   const hasCashflow = cashflows.length > 0
   const netCf = netCashflowPortfolioUsdt(cashflows, scope)
 
@@ -94,7 +105,7 @@ export function buildJournalEquitySummary(
   const equityCurve: EquityCurvePointDto[] = []
   let step = 0
   for (const row of timeline) {
-    if (row.kind === "trade") {
+    if (row.kind === "exit") {
       const pnl = row.pnl
       running += pnl
       step += 1
@@ -154,6 +165,10 @@ export function capitalUsdtBeforeExclusive(
   return netCf + pnl
 }
 
+type AnalyticsTimelineRow =
+  | { kind: "trade"; at: number; pnl: number; trade: TradeClosed }
+  | { kind: "cashflow"; at: number; delta: number; id: string }
+
 export function buildAnalyticsEquityCurve(
   capital0: number,
   tradesInPeriod: TradeWithLegsForEquity[],
@@ -165,7 +180,7 @@ export function buildAnalyticsEquityCurve(
     .slice()
     .sort((a, b) => (a.closedAt!.getTime() - b.closedAt!.getTime()))
 
-  const rows: TimelineRow[] = []
+  const rows: AnalyticsTimelineRow[] = []
   for (const t of closed) {
     rows.push({
       kind: "trade",
@@ -216,6 +231,105 @@ export function buildAnalyticsEquityCurve(
   }
 
   return curve
+}
+
+/** Equity-кривая по каждому выходу (сделке) в периоде + cashflow. */
+export function buildAnalyticsEquityCurveFromExits(
+  capital0: number,
+  tradesAll: TradeWithLegsForEquity[],
+  cashflowsInPeriod: Cashflow[],
+  scope: JournalEquityScope,
+  periodStartUtc: Date,
+  periodEndExclusiveUtc: Date,
+): AnalyticsEquityPointDto[] {
+  type ExitRow = { at: number; pnl: number; atIso: string }
+  const exitRows: ExitRow[] = []
+  const t0 = periodStartUtc.getTime()
+  const t1 = periodEndExclusiveUtc.getTime()
+
+  for (const t of tradesAll) {
+    if (!tradeInScope(t, scope)) continue
+    for (const ex of t.exits) {
+      if (ex.deletedAt != null) continue
+      const at = ex.timestamp.getTime()
+      if (at < t0 || at >= t1) continue
+      const leg = pnlRoiForExitLeg(t.direction, t.entries, ex)
+      exitRows.push({ at, pnl: leg.pnl, atIso: ex.timestamp.toISOString() })
+    }
+  }
+
+  type Row = { kind: "exit"; at: number; pnl: number; atIso: string } | { kind: "cashflow"; at: number; delta: number }
+  const rows: Row[] = exitRows.map((e) => ({ kind: "exit" as const, ...e }))
+  for (const cf of cashflowsInPeriod) {
+    const delta = cashflowPortfolioDeltaUsdt(cf, scope)
+    if (!Number.isFinite(delta) || delta === 0) continue
+    rows.push({ kind: "cashflow", at: cf.timestamp.getTime(), delta })
+  }
+  rows.sort((a, b) => {
+    if (a.at !== b.at) return a.at - b.at
+    if (a.kind !== b.kind) return a.kind === "cashflow" ? -1 : 1
+    return 0
+  })
+
+  const curve: AnalyticsEquityPointDto[] = []
+  let cumTradePnl = 0
+  let balance = capital0
+  let idx = 0
+
+  for (const row of rows) {
+    idx += 1
+    if (row.kind === "exit") {
+      cumTradePnl += row.pnl
+      balance += row.pnl
+      curve.push({
+        index: idx,
+        closedAt: row.atIso,
+        pnlUsdt: row.pnl,
+        cumulativePnlUsdt: cumTradePnl,
+        balanceUsdt: balance,
+      })
+    } else {
+      balance += row.delta
+      curve.push({
+        index: idx,
+        closedAt: new Date(row.at).toISOString(),
+        pnlUsdt: row.delta,
+        cumulativePnlUsdt: cumTradePnl,
+        balanceUsdt: balance,
+      })
+    }
+  }
+
+  return curve
+}
+
+/** Equity журнала строго до момента выхода (сумма PnL всех ног с timestamp < at). */
+export function equityUsdtBeforeExitLeg(
+  atExclusive: Date,
+  tradesAll: TradeWithLegsForEquity[],
+  cashflowsSortedAsc: Cashflow[],
+  scope: JournalEquityScope,
+  journalHasAnyCashflow: boolean,
+): number {
+  const cut = atExclusive.getTime()
+  const cfBefore = cashflowsSortedAsc.filter((c) => c.timestamp.getTime() < cut)
+  const netCf = netCashflowPortfolioUsdt(cfBefore, scope)
+  let base = journalHasAnyCashflow
+    ? Number.isFinite(netCf)
+      ? netCf
+      : 0
+    : JOURNAL_INITIAL_DEPOSIT_USDT
+
+  let exitPnl = 0
+  for (const t of tradesAll) {
+    if (!tradeInScope(t, scope)) continue
+    for (const ex of t.exits) {
+      if (ex.deletedAt != null) continue
+      if (ex.timestamp.getTime() >= cut) continue
+      exitPnl += pnlRoiForExitLeg(t.direction, t.entries, ex).pnl
+    }
+  }
+  return base + exitPnl
 }
 
 export function maxDrawdownFromBalances(

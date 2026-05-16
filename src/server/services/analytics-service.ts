@@ -88,14 +88,13 @@ export const analyticsService = {
     const symbolFilter = query.symbol?.trim() || null
     const strategyFilter = query.strategy?.trim() || null
 
-    const [before, period, legacyCashflowAccountId] = await Promise.all([
-      tradesRepository.findClosedTradesClosedBefore(
+    const [allTradesForEquity, periodTrades, legacyCashflowAccountId] = await Promise.all([
+      tradesRepository.findTradesWithLegsForJournalEquity(
         userId,
-        start,
         journalAllAccounts,
         journalAccountId,
       ),
-      tradesRepository.findClosedTradesAnalyticsPeriod(
+      tradesRepository.findTradesWithExitsInAnalyticsPeriod(
         userId,
         start,
         endExclusive,
@@ -139,12 +138,13 @@ export const analyticsService = {
       symbolFilter,
       strategyFilter,
       marketTypeFilter: marketTypeFilter ?? null,
-      tradesClosedStrictlyBeforeStart: before as TradeWithLegs[],
-      tradesClosedInPeriod: period as TradeWithLegs[],
+      allTradesForEquity: allTradesForEquity as TradeWithLegs[],
+      tradesWithExitsInPeriod: periodTrades as TradeWithLegs[],
       cashflowsStrictlyBeforeStart,
       cashflowsInPeriod,
       journalHasCashflow,
       periodStartUtc: start,
+      periodEndExclusiveUtc: endExclusive,
       legacyCashflowAccountId,
     })
 

@@ -9,6 +9,10 @@ export type DashboardDayStatsDto = {
   /** Капитал на начало календарного дня (cashflow + закрытый PnL до dayStart). */
   balanceAtDayStartUsdt: number
   displayCurrency: "USDT"
+  /** Цель по USDT на календарный день (этап 4.5); null если прогноз не настроен или цель уже достигнута. */
+  derivativeDayTargetUsdt: number | null
+  /** true, если заполнены валидные поля прогноза в RiskSettings. */
+  forecastConfigured: boolean
 }
 
 export type QuoteSourceDto = "manual" | "exchange"

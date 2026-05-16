@@ -21,8 +21,10 @@ export type AnalyticsSummaryDto = {
   bestTradePnlUsdt: number | null
   worstTradePnlUsdt: number | null
   maxTradeRoiPercent: number | null
-  /** Макс. ROI сделки к депозиту (PnL / journalDeposit), %. */
+  /** Макс. ROI сделки к equity на момент закрытия, %. */
   maxDepositRoiPercent: number | null
+  /** Макс. дневной ROI: PnL дня / equity на начало дня, %. */
+  maxDailyDepositRoiPercent: number | null
   sharpeRatio: number | null
   maxDrawdownUsdt: number
   maxDrawdownPercent: number | null
